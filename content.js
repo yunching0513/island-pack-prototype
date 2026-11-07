@@ -196,6 +196,10 @@ window.CONTENT = {
     ['version', '資料版本', '公開資料的發布版本'],
   ],
 
+  /* 每個討論點對應一則 GitHub issue，留言都集中在同一條討論串 */
+  REPO: 'https://github.com/yunching0513/island-pack-prototype',
+  THREADS: { h1: 1, h2: 2, r1: 3, r2: 4, r3: 5, r4: 6, s1: 7, s2: 8, s3: 9, n1: 10, n2: 11, n3: 12, d1: 13, d2: 14, d3: 15, a1: 16, a2: 17, a3: 18, x1: 19, x2: 20, x3: 21, x4: 22 },
+
   /* 討論點。ref 指向構想文件章節 */
   ISSUES: {
     home: [

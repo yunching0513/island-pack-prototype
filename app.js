@@ -337,13 +337,14 @@ function renderRail() {
       ${it.control === 'timing' ? `<div class="q-ctl"><div class="seg" role="group" aria-label="卡片浮現時機">
         ${[['live', '即時'], ['tier', '分級'], ['after', '填完才看']].map(([v, l]) => `<button type="button" id="tm-${v}" data-act="timing" data-v="${v}" ${pressed(S.timing === v)}>${l}</button>`).join('')}
       </div><p class="note" id="timingNote">${TIMING[S.timing]}</p></div>` : ''}
-      <div class="q-foot"><span class="q-ref">文件：${esc(it.ref)}</span><button type="button" class="q-comment" data-act="comment" data-q="q-${it.id}">留言</button></div>
+      <div class="q-foot"><span class="q-ref">文件：${esc(it.ref)}</span><span class="q-acts"><button type="button" class="q-comment" data-act="comment" data-q="q-${it.id}">在這裡留言</button><a class="q-issue" href="${C.REPO}/issues/${C.THREADS[it.id]}" target="_blank" rel="noopener">到 GitHub 留言</a></span></div>
     </section>`;
   $('#rail').innerHTML = `
     <div class="rail-head"><h2 id="railTitle">這個畫面要討論的事</h2><button type="button" class="btn quiet sm rail-close" data-act="rail">收起</button></div>
     <section class="tour" data-for="home" hidden><h3>建議走法</h3><ol>${C.TOUR.map(([v, t, d]) => `<li><span><button type="button" data-go="${v}">${t}</button><br>${d}</span></li>`).join('')}</ol></section>
     ${Object.entries(C.ISSUES).map(([v, list]) => list.map(it => q(v, it)).join('')).join('')}
-    <div class="rail-foot"><button type="button" class="btn sm" data-go="issues">全部待決議題</button><button type="button" class="btn quiet sm" data-act="reset">重設原型</button></div>`;
+    <div class="rail-foot"><button type="button" class="btn sm" data-go="issues">全部待決議題</button><a class="btn quiet sm" href="${C.REPO}/issues?q=${encodeURIComponent('is:issue label:討論點')}" target="_blank" rel="noopener">看所有留言</a><button type="button" class="btn quiet sm" data-act="reset">重設原型</button></div>
+    <p class="note">留言需要 GitHub 帳號，內容是公開的。</p>`;
 }
 function syncRail() {
   $$('[data-for]', $('#rail')).forEach(el => { el.hidden = el.dataset.for !== S.view; });

@@ -4,6 +4,8 @@
 
 線上版：<https://yunching0513.github.io/island-pack-prototype/>
 
+討論：每個討論點都有一則 [Issue](https://github.com/yunching0513/island-pack-prototype/issues?q=is%3Aissue+label%3A%E8%A8%8E%E8%AB%96%E9%BB%9E)，網站討論欄的「到 GitHub 留言」會直接連過去。留言需要 GitHub 帳號，內容是公開的。
+
 **頁面上的紀錄、組織與統計都是示例，尚未查核，不代表任何地方的實際情況。** 只有村里界與道路是真實圖資。安全提示的文字也還沒經專業查核，請勿直接使用。
 
 ## 畫面
