@@ -165,6 +165,7 @@ function GeoMap(host, opt = {}) {
   fit(opt.bb || G.bbox);
   return {
     fit, zoom,
+    width: () => view.w,
     over: html => { gOver.innerHTML = html; },
     raw: html => { gRaw.innerHTML = html; },
     fill(fn) {
@@ -320,8 +321,9 @@ const ICONS = {
   data: '<path d="M5 21V12M12 21V4M19 21V9" stroke="currentColor" stroke-width="3"/>',
 };
 function renderNav() {
-  const items = [['record', '記錄一次相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料'], ['admin', '管理後台', 1], ['issues', '待決議題', 1]];
-  $('#nav').innerHTML = items.map(([v, l, st]) => `<button type="button" data-go="${v}" class="${st ? 'staff' : ''}" ${S.view === v ? 'aria-current="page"' : ''}>${l}</button>`).join('');
+  const items = [['record', '記錄一次相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料']];
+  $('#nav').innerHTML = items.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${l}</button>`).join('');
+  $$('.band-nav [data-go]').forEach(b => { if (b.dataset.go === S.view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   const tabs = [['home', '首頁'], ['record', '記錄'], ['survey', '觀察'], ['nearby', '附近'], ['data', '資料']];
   $('#tabbar').innerHTML = tabs.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[v]}</svg>${l}</button>`).join('');
 }
@@ -445,7 +447,7 @@ function matchCards() {
 function cardView(c) {
   if (c.dynamic !== 'localRecord') return c;
   const p = S.draft.pin, a = aggregate('vill').get(p.code) || { n: 0, s: 0, sd: 0 };
-  const n = a.n > 0 && a.n < S.dx.k ? `不到 ${S.dx.k} 筆` : `${a.n} 筆`;
+  const n = a.n > 0 && a.n < S.dx.k ? `不到 ${S.dx.k} 筆` : ` ${a.n} 筆`;
   return { ...c, title: `${p.village}這一帶的紀錄`, lead: `近六個月有${n}經檢核的紀錄、${a.s} 次持續觀察，其中 ${a.sd} 次見犬。` };
 }
 function cardHTML({ c: raw, why }, isNew) {
@@ -510,9 +512,14 @@ function stepScene() {
     <p class="safe">請站在安全距離，不要為了拍照靠近犬隻。</p>
     ${demoBtn(0)}
     <div class="form-sec"><h3>位置</h3>
-      <p class="step-note">實際版本會先用手機定位。原型請點地圖放置位置。</p>
+      <p class="step-note">實際版本會先用手機定位。原型請點地圖，或從下面的清單選擇。</p>
       <div class="map map-rec" id="recMap"></div>
-      <p class="pinline ${d.pin ? '' : 'empty'}" id="pinLine">${pinText()}</p>
+      <p class="note" id="mapHint">${d.pin ? HINT.moved : HINT.start}</p>
+      <div class="filter-row">
+        <label class="field" for="pickTown"><span>鄉鎮市</span><select id="pickTown" data-pick="town"><option value="">選擇鄉鎮市</option>${TOWNS.map(t => `<option ${d.pin?.town === t.n ? 'selected' : ''}>${t.n}</option>`).join('')}</select></label>
+        <label class="field" for="pickVill"><span>村里</span><select id="pickVill" data-pick="vill" ${d.pin ? '' : 'disabled'}>${villOptions(d.pin?.town, d.pin?.code)}</select></label>
+      </div>
+      <p class="pinline ${d.pin ? '' : 'empty'}" id="pinLine" aria-live="polite">${pinText()}</p>
       <div class="seg" role="group" aria-label="位置精度">
         <button type="button" id="prec-exact" data-act="prec" data-v="exact" ${pressed(d.precision === 'exact')}>準確</button>
         <button type="button" id="prec-approx" data-act="prec" data-v="approx" ${pressed(d.precision === 'approx')}>大約</button>
@@ -535,6 +542,14 @@ function stepScene() {
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act"><button type="button" class="btn primary" id="next-0" data-act="step" data-n="1">下一步：今天看見</button></div>`;
 }
+const HINT = {
+  start: '先點你所在的大概位置，地圖會放大；再點一下放下位置。',
+  zoomed: '再點一下，放下觀察位置。',
+  moved: '位置不對？在地圖上再點一次就能移動。',
+};
+const villOptions = (town, code) => town
+  ? '<option value="">選擇村里</option>' + G.villages.filter(v => v.t === town).sort((a, b) => a.v.localeCompare(b.v, 'zh-Hant')).map(v => `<option value="${v.c}" ${v.c === code ? 'selected' : ''}>${v.v}</option>`).join('')
+  : '<option value="">先選鄉鎮市</option>';
 const pinText = () => {
   const p = S.draft.pin;
   return p ? `苗栗縣 ${esc(p.town)} ${esc(p.vname)}` : '還沒有選位置';
@@ -668,20 +683,27 @@ function mountRecMap() {
     onClick(x, y) {
       const v = villageAt(x, y);
       if (!v) { toast('原型目前只有苗栗縣的資料。'); return; }
+      // 全縣尺度一下點不準，先放大到約 12 公里寬，再讓人點第二下
+      if (m.width() > 1500) {
+        m.fit([x - 600, y - 450, x + 600, y + 450], 0);
+        const h = $('#mapHint'); if (h) h.textContent = HINT.zoomed;
+        return;
+      }
       setPin(x, y, v);
     },
   });
   S.mapRefs.rec = m;
-  if (d.pin) { m.pin(d.pin); m.fit(byCode.get(d.pin.code).bb, .9); }
+  if (d.pin) { m.pin(d.pin); m.fit([d.pin.x - 600, d.pin.y - 450, d.pin.x + 600, d.pin.y + 450], 0); }
 }
 function setPin(x, y, v) {
-  const first = !S.draft.pin;
   S.draft.pin = { x, y, code: v.c, town: v.t, vname: v.v, village: v.t + v.v };
   S.err = '';
   S.mapRefs.rec?.pin(S.draft.pin);
-  if (first) S.mapRefs.rec?.fit(v.bb, .9);
   const l = $('#pinLine');
   if (l) { l.textContent = `苗栗縣 ${v.t} ${v.v}`; l.classList.remove('empty'); }
+  const h = $('#mapHint'); if (h) h.textContent = HINT.moved;
+  const pt = $('#pickTown'), pv = $('#pickVill');
+  if (pt && pv) { pt.value = v.t; pv.innerHTML = villOptions(v.t, v.c); pv.disabled = false; }
   const e = $('#stepErr'); if (e) e.textContent = '';
   renderCards();
 }
@@ -727,12 +749,12 @@ function viewReceipt() {
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
     <section class="block"><h2 class="sec">下一步</h2>
-      <div class="next">
-        <button type="button" class="btn primary" data-go="admin">到管理後台核准這筆</button>
-        <button type="button" class="btn" data-go="nearby">看看附近</button>
+      <div class="next two">
+        <button type="button" class="btn primary" data-go="nearby">看看附近</button>
         <button type="button" class="btn" data-act="again">再記一筆</button>
       </div>
-      <p class="note" style="margin-top:8px">「到管理後台」是給團隊看的捷徑，居民看不到這個按鈕。</p>
+      <div class="demo" style="margin-top:16px"><button type="button" data-go="admin">原型捷徑：到管理後台核准這筆</button></div>
+      <p class="note" style="margin-top:8px">虛線按鈕是原型才有的捷徑，居民版不會出現。</p>
     </section>
     <section class="block invite"><div><h2 class="sec">想持續留意這個地方？</h2><p class="sec-lede">用同樣的方法定期觀察，才看得出變化。</p></div><button type="button" class="btn" data-go="survey">參加持續觀察</button></section>
   </div>`;
@@ -788,7 +810,7 @@ function viewSurvey() {
       : `<div class="cta">
           <button type="button" class="btn primary" id="sv-go" data-act="sv-toggle">${run ? '暫停' : v.t ? '繼續' : '開始觀察'}</button>
           ${v.t ? `<button type="button" class="btn" id="sv-end" data-act="sv-end">${point ? '提早結束' : '走完了'}</button>` : ''}
-          <button type="button" class="btn quiet sm" id="sv-fast" data-act="sv-fast" ${pressed(v.speed > 1)}>${v.speed > 1 ? '快轉中（30 倍）' : '快轉（原型用）'}</button>
+          <span class="demo" style="margin:0"><button type="button" id="sv-fast" data-act="sv-fast" ${pressed(v.speed > 1)}>${v.speed > 1 ? '快轉中（30 倍）' : '快轉（原型用）'}</button></span>
         </div>`}
         <div class="form-sec">
           <h3>環境條件</h3>
@@ -1353,6 +1375,17 @@ document.addEventListener('change', e => {
     S.nb[t.dataset.nb] = t.value; S.nb.sel = null;
     if (t.dataset.nb === 'town') S.mapRefs.nb?.fit(t.value === 'all' ? G.bbox : townBB(t.value), t.value === 'all' ? .05 : .12);
     updateNearby();
+  } else if (t.dataset.pick === 'town') {
+    const pv = $('#pickVill');
+    pv.innerHTML = villOptions(t.value); pv.disabled = !t.value;
+    if (t.value) S.mapRefs.rec?.fit(townBB(t.value), .08);
+  } else if (t.dataset.pick === 'vill' && t.value) {
+    // 從清單選的只知道村里，位置放在村里中心並標成「大約」
+    const v = byCode.get(t.value);
+    setPin(v.x, v.y, v);
+    S.mapRefs.rec?.fit([v.x - 600, v.y - 450, v.x + 600, v.y + 450], 0);
+    S.draft.precision = 'approx';
+    $$('[data-act="prec"]').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === 'approx'));
   } else if (t.dataset.dx === 'month') { S.dx.month = t.value; updateData(); }
   else if (t.dataset.sv) { S.sv[t.dataset.sv] = t.value; }
 });

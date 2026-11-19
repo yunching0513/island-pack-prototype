@@ -5,7 +5,8 @@
 <style>
 /* 依《國際式樣：中西文排版指南》v1.3 實作。
    版面：12 欄的 8＋4。左 8 欄是居民看到的網站，右 4 欄是團隊的討論點，可收合。
-   色彩：強調色用路牌綠，只標主要動作與目前位置。地圖不用紅色，避免「熱區」被讀成「危險區」。
+   色彩：強調色用路牌綠，只標主要動作與目前位置。地圖色階用紫色，和按鈕分開；不用紅色，避免「熱區」被讀成「危險區」。
+   地圖最淺一級與「沒有資料」斜線對陸地都至少 3:1。
    字體與邊角：團隊試用圓體（jf 粉圓）與圓角，這兩項刻意偏離指南的方角與黑體。
    粉圓是臺灣字形且涵蓋本站全部用字；日系圓體缺「鄉」等字。 */
 :root{
@@ -13,8 +14,8 @@
   --rule:#b7b4ae; --rule2:#d7d4cd;
   --accent:#00664a; --on-accent:#ffffff; --accent-soft:#d9e9e1;
   --warn:#7c4300; --warn-soft:#f2e4cf;
-  --sea:#d8e2e2; --land:#fbfaf6; --land2:#e5e2d9; --road:#a59f92; --hatch:#c4c0b6;
-  --q1:#cfe3d9; --q2:#9dcbb6; --q3:#62a98c; --q4:#2a8366; --q5:#00593f;
+  --sea:#d8e2e2; --land:#fbfaf6; --land2:#e5e2d9; --road:#a59f92; --hatch:#8a8476;
+  --q1:#9581c3; --q2:#7b66b1; --q3:#5e4998; --q4:#44307d; --q5:#2b1a5a;
   --wall:#dcd8cc; --ground:#c5c1b4; --figure:#2a2a28;
   --round:"Huninn","jf-openhuninn-2.0","PingFang TC","Noto Sans TC","Microsoft JhengHei";
   --ui:var(--round),sans-serif;
@@ -30,8 +31,8 @@
   --rule:#4a463d; --rule2:#302d26;
   --accent:#62d3ac; --on-accent:#08231a; --accent-soft:#17352b;
   --warn:#e7b163; --warn-soft:#3a2a12;
-  --sea:#10181b; --land:#23211b; --land2:#191813; --road:#5d584c; --hatch:#3f3b32;
-  --q1:#1f3d32; --q2:#2c6350; --q3:#3b8a6f; --q4:#53b593; --q5:#8ce0c1;
+  --sea:#10181b; --land:#23211b; --land2:#191813; --road:#5d584c; --hatch:#7f796b;
+  --q1:#7462a6; --q2:#9282c2; --q3:#b0a3da; --q4:#cdc3ec; --q5:#e9e3fb;
   --wall:#2e2c25; --ground:#3a372f; --figure:#e6e2d6;
   color-scheme:dark;
 }}
@@ -40,8 +41,8 @@
   --rule:#4a463d; --rule2:#302d26;
   --accent:#62d3ac; --on-accent:#08231a; --accent-soft:#17352b;
   --warn:#e7b163; --warn-soft:#3a2a12;
-  --sea:#10181b; --land:#23211b; --land2:#191813; --road:#5d584c; --hatch:#3f3b32;
-  --q1:#1f3d32; --q2:#2c6350; --q3:#3b8a6f; --q4:#53b593; --q5:#8ce0c1;
+  --sea:#10181b; --land:#23211b; --land2:#191813; --road:#5d584c; --hatch:#7f796b;
+  --q1:#7462a6; --q2:#9282c2; --q3:#b0a3da; --q4:#cdc3ec; --q5:#e9e3fb;
   --wall:#2e2c25; --ground:#3a372f; --figure:#e6e2d6;
   color-scheme:dark;
 }
@@ -72,8 +73,9 @@ a:hover{color:var(--accent)}
 .band-id b{font-weight:700}
 .band-note{flex:1 1 280px;min-width:0}
 .band-tools{display:flex;gap:var(--s2);align-items:center}
-.band .seg button,.band .band-btn{min-height:36px;background:transparent;color:var(--paper);border:1px solid var(--paper);padding:0 12px;font-size:14px;line-height:1.2;cursor:pointer}
-.band .seg button[aria-pressed="true"]{background:var(--paper);color:var(--ink)}
+.band .seg button,.band .band-btn{min-height:44px;background:transparent;color:var(--paper);border:1px solid var(--paper);padding:0 12px;font-size:14px;line-height:1.2;cursor:pointer}
+.band .seg button[aria-pressed="true"],.band .band-btn[aria-current="page"]{background:var(--paper);color:var(--ink)}
+.band-nav{display:flex;gap:var(--s2)}
 .band .seg button+button{border-left:0}
 .band .seg{display:flex}
 
@@ -168,8 +170,6 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 .nav button:hover{color:var(--accent)}
 .nav button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .nav button[aria-current="page"]{border-bottom-color:var(--accent);font-weight:700}
-.nav .staff{color:var(--muted)}
-.site-admin{font-size:14px}
 .tabbar{position:sticky;bottom:0;z-index:12;background:var(--paper);border-top:2px solid var(--ink);display:grid;grid-template-columns:repeat(5,minmax(0,1fr));padding-bottom:env(safe-area-inset-bottom,0px)}
 .tabbar button{all:unset;cursor:pointer;min-height:var(--tabh);display:grid;place-items:center;align-content:center;gap:2px;font-size:14px;line-height:1.3;text-align:center;border-top:3px solid transparent;margin-top:-2px}
 .tabbar button svg{width:22px;height:22px}
@@ -178,7 +178,6 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 @container app (min-width:700px){
   .nav{display:flex}
   .tabbar{display:none}
-  .site-admin{display:none}
 }
 .foot{padding-block:var(--s5);margin-top:var(--s6);border-top:1px solid var(--rule);font-size:14px;line-height:1.7;color:var(--muted)}
 .foot p+p{margin-top:var(--s2)}
@@ -389,7 +388,7 @@ body[data-device="phone"] .rec-cards{--padx:16px}
 .facts dt{font-size:14px;line-height:1.5;font-weight:700;margin-top:var(--s1)}
 .facts dd.ed{color:var(--muted)}
 .next{display:grid;gap:var(--s2);margin-top:var(--s3)}
-@container app (min-width:700px){.next{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@container app (min-width:700px){.next{grid-template-columns:repeat(3,minmax(0,1fr))}.next.two{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .next .btn{width:100%}
 
 /* ── 開放資料 ── */
@@ -478,6 +477,7 @@ td.mono{white-space:nowrap}
 .seg button{border:0}
 .seg button+button{border-left:1px solid var(--ink)}
 .seg button:focus-visible{outline-offset:-3px}
+.form-sec>.seg{justify-self:start}
 .band .seg{border-color:var(--paper)}
 .band .seg button{border:0}
 .band .seg button+button{border-left:1px solid var(--paper)}
@@ -518,6 +518,10 @@ body[data-device="phone"] .app{border-radius:30px}
     <p class="band-id"><b>島與群平台原型</b> v0.1</p>
     <p class="band-note">討論用。紀錄、組織與統計都是示例，尚未查核。</p>
     <div class="band-tools">
+      <nav class="band-nav" aria-label="團隊用畫面">
+        <button type="button" class="band-btn" data-go="admin">管理後台</button>
+        <button type="button" class="band-btn" data-go="issues">待決議題</button>
+      </nav>
       <div class="seg" role="group" aria-label="預覽裝置">
         <button type="button" id="dev-auto" data-act="device" data-v="auto" aria-pressed="true">電腦</button>
         <button type="button" id="dev-phone" data-act="device" data-v="phone" aria-pressed="false">手機</button>
@@ -532,7 +536,6 @@ body[data-device="phone"] .app{border-radius:30px}
     <header class="site pad">
       <button type="button" class="wordmark" data-go="home">島與群</button>
       <nav class="nav" id="nav" aria-label="主要"></nav>
-      <button type="button" class="btn quiet site-admin" data-go="admin" style="min-height:24px;font-size:14px">管理後台</button>
     </header>
     <main id="view"></main>
     <footer class="foot pad" id="foot">
