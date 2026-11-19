@@ -1,8 +1,12 @@
-# 島與群平台原型
+# 貓克敏（暫名）
 
-遊蕩犬公民科學與開放資料平台的可操作原型，用於島與群團隊討論，不是正式服務。
+**改版中。** 這個倉庫正從「島與群平台原型」改為「貓克敏」：用日常散步、像素動物卡與鄰里故事，促成街頭貓狗被收編。12/3 簡報前的工作與之後的階段見 [ROADMAP.md](ROADMAP.md)，待辦都在 [12/3 簡報里程碑](https://github.com/yunching0513/island-pack-prototype/milestone/1)。
 
-線上版：<https://yunching0513.github.io/island-pack-prototype/>
+改版完成前，線上版仍是島與群原型：<https://yunching0513.github.io/island-pack-prototype/>。島與群版本保存在標籤 [`v0.3-island-pack`](https://github.com/yunching0513/island-pack-prototype/tree/v0.3-island-pack)。
+
+## 目前線上版：島與群平台原型
+
+遊蕩犬公民科學與開放資料平台的可操作原型，用於團隊討論，不是正式服務。
 
 討論：每個討論點都有一則 [Issue](https://github.com/yunching0513/island-pack-prototype/issues?q=is%3Aissue+label%3A%E8%A8%8E%E8%AB%96%E9%BB%9E)，網站討論欄的「到 GitHub 留言」會直接連過去。留言需要 GitHub 帳號，內容是公開的。
 
