@@ -269,7 +269,7 @@ const S = {
   view: 'home', step: 0, draft: newDraft(), err: '', submitted: null, timing: 'live',
   openCard: null, seen: [], trayOpen: false, latest: '', mapRefs: {},
   sv: newSurvey(), timer: null,
-  nb: { town: 'all', month: 'all', scale: 'vill', metric: 'count', kinds: new Set(Object.keys(C.KINDS)), sel: null },
+  nb: { town: 'all', month: 'all', scale: 'vill', metric: 'count', kinds: new Set(Object.keys(C.KINDS)), sel: null, open: false },
   dx: { scale: 'g1000', k: 3, month: 'all', raw: false, fmt: 'csv' },
   ad: { tab: 'queue' },
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
@@ -478,7 +478,11 @@ function renderCards() {
   const fresh = shown.filter(x => !S.seen.includes(x.c.id));
   [...fresh].reverse().forEach(x => S.seen.unshift(x.c.id));
   shown.sort((a, b) => S.seen.indexOf(a.c.id) - S.seen.indexOf(b.c.id));
-  if (fresh.length) S.latest = `新增：${cardView(fresh[fresh.length - 1].c).title}`;
+  if (fresh.length) {
+    S.latest = `新增：${cardView(fresh[fresh.length - 1].c).title}`;
+    const live = $('#cardsLive');
+    if (live) live.textContent = `新增 ${fresh.length} 張地方資訊：${fresh.map(x => cardView(x.c).title).join('、')}`;
+  }
   col.classList.toggle('open', S.trayOpen);
   col.innerHTML = `
     <button type="button" class="cards-head" data-act="tray" aria-expanded="${S.trayOpen}"><span>這一帶</span><span class="cnt">${shown.length} 張 <span class="chev">${S.trayOpen ? '▾' : '▴'}</span></span></button>
@@ -500,6 +504,7 @@ function viewRecord() {
       <div class="rec-form" id="stepBody"></div>
       <aside class="rec-cards" id="cardsCol" aria-label="這一帶的地方資訊"></aside>
     </div>
+    <p class="sr-only" id="cardsLive" aria-live="polite"></p>
   </div>`;
 }
 function renderStepBar() {
@@ -813,7 +818,7 @@ function viewSurvey() {
           <span class="demo" style="margin:0"><button type="button" id="sv-fast" data-act="sv-fast" ${pressed(v.speed > 1)}>${v.speed > 1 ? '快轉中（30 倍）' : '快轉（原型用）'}</button></span>
         </div>`}
         <div class="form-sec">
-          <h3>環境條件</h3>
+          <h2>環境條件</h2>
           <div class="filter-row">
             <label class="field" for="sv-w"><span>天氣</span><select id="sv-w" data-sv="weather">${['晴', '陰', '小雨'].map(o => `<option ${v.weather === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
             <label class="field" for="sv-p"><span>時段</span><select id="sv-p" data-sv="period">${['清晨', '早上', '下午', '傍晚', '晚上'].map(o => `<option ${v.period === o ? 'selected' : ''}>${o}</option>`).join('')}</select></label>
@@ -848,20 +853,24 @@ function viewNearby() {
   const n = S.nb;
   return `<div class="page pad">
     <div class="page-head"><h1>看看附近</h1><p class="lede">按區域和月份閱讀經過檢核的紀錄。不同來源的內容會標出類型。</p></div>
-    <div class="filters">
+    <div class="nb-bar">
+      <p class="nb-sum" id="nbSum"></p>
+      <button type="button" class="btn sm" id="nbToggle" data-act="nb-filters" aria-expanded="${n.open}" aria-controls="nbFilters">篩選</button>
+    </div>
+    <div class="filters${n.open ? ' open' : ''}" id="nbFilters">
       <div class="filter-row">
         <label class="field" for="nb-town"><span>區域</span><select id="nb-town" data-nb="town"><option value="all">苗栗縣全縣</option>${TOWNS.map(t => `<option ${n.town === t.n ? 'selected' : ''}>${t.n}</option>`).join('')}</select></label>
         <label class="field" for="nb-month"><span>月份</span><select id="nb-month" data-nb="month"><option value="all">${fmtMonth('all')}</option>${C.FILTER_MONTHS.map(m => `<option value="${m}" ${n.month === m ? 'selected' : ''}>${fmtMonth(m)}</option>`).join('')}</select></label>
       </div>
       <div class="chips" role="group" aria-label="資料類型">${Object.entries(C.KINDS).map(([k, o]) => `<button type="button" class="chip" id="kind-${k}" data-act="nb-kind" data-k="${k}" ${pressed(n.kinds.has(k))}><span class="tag">${mark(o.mark)}${o.label}</span></button>`).join('')}</div>
-      <div class="filter-row">
-        <div class="seg" role="group" aria-label="地圖尺度">${['town', 'vill', 'g1000'].map(s => `<button type="button" id="sc-${s}" data-act="nb-scale" data-v="${s}" ${pressed(n.scale === s)}>${SCALES[s].label}</button>`).join('')}</div>
-        <div class="seg" role="group" aria-label="地圖指標"><button type="button" id="mt-count" data-act="nb-metric" data-v="count" ${pressed(n.metric === 'count')}>紀錄筆數</button><button type="button" id="mt-rate" data-act="nb-metric" data-v="rate" ${pressed(n.metric === 'rate')}>見犬比例</button></div>
-      </div>
     </div>
     <div class="nb-grid">
       <div>
         <div class="map map-nb" id="nbMap"></div>
+        <div class="map-opts">
+          <div class="seg" role="group" aria-label="地圖尺度">${['town', 'vill', 'g1000'].map(s => `<button type="button" id="sc-${s}" data-act="nb-scale" data-v="${s}" ${pressed(n.scale === s)}>${SCALES[s].label}</button>`).join('')}</div>
+          <div class="seg" role="group" aria-label="地圖指標"><button type="button" id="mt-count" data-act="nb-metric" data-v="count" ${pressed(n.metric === 'count')}>紀錄筆數</button><button type="button" id="mt-rate" data-act="nb-metric" data-v="rate" ${pressed(n.metric === 'rate')}>見犬比例</button></div>
+        </div>
         <div class="legend" id="nbLegend"></div>
         <p class="note" style="margin-top:8px">紀錄筆數不等於犬隻數量，顏色深不代表密度最高，斜線不代表沒有犬隻。</p>
       </div>
@@ -924,6 +933,9 @@ function updateNearby() {
   drawAreas(m, n.scale, cells, value, { hatchAll: true, selKey: n.sel?.scale === n.scale ? n.sel.key : null });
   $('#nbLegend').innerHTML = legendHTML(n.scale, n.metric) + (n.scale === 'g1000' && n.metric === 'count' ? `<span>少於 ${k} 筆的格子不顯示</span>` : '');
   renderArea(aggregate(n.scale, { month: n.month, town: n.town, enc, sur }));
+  const all = Object.keys(C.KINDS).length, changed = (n.town !== 'all') + (n.month !== 'all') + (n.kinds.size !== all);
+  $('#nbSum').textContent = `${n.town === 'all' ? '苗栗縣全縣' : n.town}・${fmtMonth(n.month)}・${n.kinds.size === all ? '全部類型' : `${n.kinds.size} 種類型`}`;
+  $('#nbToggle').textContent = changed ? `篩選（${changed}）` : '篩選';
   renderStoryList();
 }
 function renderArea(cells) {
@@ -938,7 +950,7 @@ function renderArea(cells) {
   }
   const small = n.sel && n.sel.scale === n.scale && c.n > 0 && c.n < k;
   const empty = !c.n && !c.s;
-  $('#nbArea').innerHTML = `<h3>${esc(title)}</h3><p class="note">${fmtMonth(n.month)}${n.sel ? '' : '。點地圖看單一區域。'}</p>
+  $('#nbArea').innerHTML = `<h2>${esc(title)}</h2><p class="note">${fmtMonth(n.month)}${n.sel ? '' : '。點地圖看單一區域。'}</p>
     <dl><dt>偶遇紀錄</dt><dd>${small ? `少於 ${k} 筆` : `${c.n} 筆`}</dd><dt>持續觀察</dt><dd>${c.s} 次</dd><dt>見犬</dt><dd>${c.sd} 次</dd><dt>見犬比例</dt><dd>${c.s ? Math.round(c.sd / c.s * 100) + '%' : '—'}</dd><dt>觀察努力量</dt><dd>${c.min} 分鐘</dd></dl>
     <p class="warn">${empty ? '這裡沒有資料。可能沒有人走過，不表示沒有犬隻。' : '偶遇紀錄受使用者路線影響。跨地區比較時，請看持續觀察的見犬比例。'}</p>`;
 }
@@ -1114,7 +1126,7 @@ function ticketHTML(t) {
   const hp = t.user.photo;
   const row = (l, k) => `<tr><td>${l}</td><td>${val(t.user[k])}</td><td>${val(t.ai[k])}</td><td><input type="text" inputmode="numeric" id="h-${t.id}-${k}" data-human="${t.id}" data-k="${k}" value="${esc(t.human[k] ?? '')}" placeholder="${val(t.user[k])}" aria-label="人工決定：${l}"></td></tr>`;
   return `<article class="ticket">
-    <div class="ticket-head"><h3>${esc(t.place)}</h3><span class="mono" style="font-size:14px">${t.id}</span></div>
+    <div class="ticket-head"><h2>${esc(t.place)}</h2><span class="mono" style="font-size:14px">${t.id}</span></div>
     <p class="small">${esc(t.time)}${t.late ? '（補登）' : ''}${t.mine ? ' <span class="mine">你剛送出的紀錄</span>' : ''}</p>
     ${t.flagNote ? `<p class="flag">${esc(t.flagNote)}${open.length ? '' : '，已處理'}</p>` : ''}
     <div class="ticket-grid ${hp ? 'has-photo' : ''}">
@@ -1339,6 +1351,7 @@ const ACT = {
   },
   'nb-scale'(t) { S.nb.scale = t.dataset.v; S.nb.sel = null; $$('[data-act="nb-scale"]').forEach(b => b.setAttribute('aria-pressed', b === t)); updateNearby(); },
   'nb-metric'(t) { S.nb.metric = t.dataset.v; $$('[data-act="nb-metric"]').forEach(b => b.setAttribute('aria-pressed', b === t)); updateNearby(); },
+  'nb-filters'(t) { S.nb.open = !S.nb.open; $('#nbFilters').classList.toggle('open', S.nb.open); t.setAttribute('aria-expanded', S.nb.open); },
   org() { $('#orgNote').hidden = false; },
   'dx-scale'(t) { S.dx.scale = t.dataset.v; $$('[data-act="dx-scale"]').forEach(b => b.setAttribute('aria-pressed', b === t)); updateData(); },
   'dx-raw'(t) { S.dx.raw = !S.dx.raw; t.setAttribute('aria-pressed', S.dx.raw); $('#dxRawNote').hidden = !S.dx.raw; updateData(); },
