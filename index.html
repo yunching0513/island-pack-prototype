@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
-<title>島與群平台原型</title>
+<title>貓克敏原型</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Huninn&display=swap">
 <style>
@@ -205,6 +205,41 @@ section.block>p,.sec-lede{max-width:36em;margin-top:var(--s2)}
 @container app (min-width:700px){.paths{grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s4)}.path{border-top:0}}
 .invite{display:grid;gap:var(--s3)}
 @container app (min-width:700px){.invite{grid-template-columns:minmax(0,1fr) auto;align-items:end}}
+/* ── 首頁：回家與回來兩個指標、回家旅程 ── */
+.sample{display:inline-block;font-size:12px;line-height:1.5;font-weight:700;padding:0 8px;border:1px dashed var(--ink);border-radius:999px;color:var(--ink);vertical-align:middle}
+.score{background:var(--paper2);border-radius:var(--r-lg);padding:var(--s3);min-width:0}
+.score-head{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;font-size:14px;line-height:1.5;color:var(--muted)}
+.score-head b{color:var(--ink);font-size:16px}
+.metric{padding-block:var(--s3);border-bottom:1px solid var(--rule)}
+.metric h2{font-size:20px;line-height:1.4;font-weight:700}
+.metric .big{font-size:48px;line-height:1.1;font-weight:900;font-variant-numeric:tabular-nums;margin-top:4px}
+.metric .big small{font-size:18px;font-weight:700}
+.metric p{font-size:16px;line-height:1.7;margin-top:var(--s1);overflow-wrap:anywhere}
+.metric details{margin-top:var(--s1);font-size:14px;line-height:1.7}
+.metric summary{cursor:pointer;min-height:32px;display:inline-flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.metric summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.metric details p{font-size:14px;color:var(--muted)}
+.goals{padding-top:var(--s3)}
+.goals h3{font-size:16px;line-height:1.5;font-weight:700}
+.goals ul{list-style:none;margin:var(--s1) 0 0;padding:0}
+.goal{margin-top:var(--s2)}
+.goal-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px var(--s2);font-size:14px;line-height:1.5}
+.goal-row b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.bar{height:10px;background:var(--land);border:1px solid var(--rule);border-radius:999px;overflow:hidden;margin-top:4px}
+.bar span{display:block;height:100%;background:var(--q3);border-radius:999px}
+.goals .note{margin-top:var(--s2)}
+.journey{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2);grid-template-columns:minmax(0,1fr)}
+.journey li{background:var(--paper2);border-radius:var(--r);padding:var(--s2) var(--s3);min-width:0}
+.journey h3{font-size:20px;line-height:1.4;font-weight:700;margin-top:2px}
+.journey p{font-size:15px;line-height:1.6;margin-top:4px}
+.journey .j-no{font-size:13px;color:var(--muted);margin-top:0}
+.journey .j-who{font-weight:700}
+.journey .j-n{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;color:var(--muted);font-size:14px}
+@container app (min-width:480px){.journey{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container app (min-width:860px){.journey{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.branch{margin-top:var(--s3);border:2px dashed var(--rule);border-radius:var(--r);padding:var(--s2) var(--s3)}
+.branch h3{font-size:18px;line-height:1.5;font-weight:700}
+.branch p{font-size:16px;line-height:1.7;margin-top:4px;max-width:40em}
 
 /* ── 地圖 ── */
 .map{position:relative;background:var(--sea);overflow:hidden;border:1px solid var(--ink);touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab}
@@ -521,8 +556,8 @@ body[data-device="phone"] .app{border-radius:30px}
 
 <div class="band">
   <div class="band-in">
-    <p class="band-id"><b>島與群平台原型</b> v0.1</p>
-    <p class="band-note">討論用。紀錄、組織與統計都是示例，尚未查核。</p>
+    <p class="band-id"><b>貓克敏原型</b>（暫名）v0.4</p>
+    <p class="band-note">簡報與討論用。動物、紀錄、組織與數字都是示例，尚未查核。</p>
     <div class="band-tools">
       <nav class="band-nav" aria-label="團隊用畫面">
         <button type="button" class="band-btn" data-go="admin">管理後台</button>
@@ -540,12 +575,12 @@ body[data-device="phone"] .app{border-radius:30px}
 <div class="stage">
   <div class="app" id="app">
     <header class="site pad">
-      <button type="button" class="wordmark" data-go="home">島與群</button>
+      <button type="button" class="wordmark" data-go="home">貓克敏</button>
       <nav class="nav" id="nav" aria-label="主要"></nav>
     </header>
     <main id="view"></main>
     <footer class="foot pad" id="foot">
-      <p>構想：島與群。這份原型由構想文件（2026 年 11 月版）製作，用於團隊討論，不是正式服務。</p>
+      <p>構想：島與群。貓克敏（暫名）是 2026 年 12 月簡報用的原型，不是正式服務。首頁以外的畫面仍是島與群平台原型的內容，正在改版。</p>
       <p>村里界：內政部（taiwan-atlas 2021 版，政府資料開放授權條款第 1 版）。道路：© OpenStreetMap 貢獻者（ODbL）。</p>
     </footer>
     <nav class="tabbar" id="tabbar" aria-label="主要"></nav>
