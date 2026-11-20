@@ -1,4 +1,4 @@
-/* 島與群平台原型。沒有後端：所有動作只存在這個分頁，重新整理就回到初始狀態。 */
+/* 巷仔口：一起回家（暫名，原暫名貓克敏，由島與群平台原型改版）。沒有後端：所有動作只存在這個分頁，重新整理就回到初始狀態。 */
 (() => {
 'use strict';
 document.documentElement.lang = 'zh-Hant-TW';
@@ -321,10 +321,10 @@ const ICONS = {
   data: '<path d="M5 21V12M12 21V4M19 21V9" stroke="currentColor" stroke-width="3"/>',
 };
 function renderNav() {
-  const items = [['record', '記錄一次相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料']];
+  const items = [['record', '記錄相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料']];
   $('#nav').innerHTML = items.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   $$('.band-nav [data-go]').forEach(b => { if (b.dataset.go === S.view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  const tabs = [['home', '首頁'], ['record', '記錄'], ['survey', '觀察'], ['nearby', '附近'], ['data', '資料']];
+  const tabs = [['home', '首頁'], ['record', '相遇'], ['survey', '觀察'], ['nearby', '附近'], ['data', '資料']];
   $('#tabbar').innerHTML = tabs.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[v]}</svg>${l}</button>`).join('');
 }
 const TIMING = {
@@ -355,46 +355,82 @@ function syncRail() {
   $('#railBtn').setAttribute('aria-expanded', document.body.dataset.rail !== 'off');
 }
 
-/* ───────── 首頁 ───────── */
+/* ───────── 首頁：回家與回來 ───────── */
+const pct = r => Math.round(r * 100);
+const one = n => (Math.round(n * 10) / 10).toFixed(1);
+function homeStats() {
+  const H = C.HOME, h = H.home, b = H.back, g = H.goals;
+  const homeRate = (h.home + h.last) / h.known, backRate = b.speciesWalks / b.hours;
+  const goals = [
+    { label: `回家或成為最後一代達到 ${pct(g.homeRate)}%`, now: `${pct(homeRate)}%`, p: homeRate / g.homeRate, ok: homeRate >= g.homeRate },
+    /* 幼崽越少越好：從上季的數字降到目標值算 100% */
+    { label: `本季新生幼崽不超過 ${g.pups} 隻`, now: `${h.pups} 隻`, p: (h.pupsLast - h.pups) / (h.pupsLast - g.pups), ok: h.pups <= g.pups },
+    { label: `每小時記錄到 ${g.backRate} 種野生動物`, now: `${one(backRate)} 種`, p: backRate / g.backRate, ok: backRate >= g.backRate },
+  ];
+  return { homeRate, backRate, goals };
+}
+function goalHTML(x) {
+  const w = Math.round(clamp(x.p, 0, 1) * 100);
+  return `<li class="goal">
+    <p class="goal-row"><span>${esc(x.label)}</span><b>${x.ok ? '已達成' : `目前 ${esc(x.now)}`}</b></p>
+    <div class="bar" aria-hidden="true"><span style="width:${w}%"></span></div>
+  </li>`;
+}
 function viewHome() {
-  const m = aggregate('vill');
-  const n = [...m.values()].reduce((s, c) => s + c.n, 0), e = [...m.values()].reduce((s, c) => s + c.s, 0);
+  const H = C.HOME, h = H.home, b = H.back, st = homeStats(), J = C.JOURNEY;
   return `<div class="page pad">
     <section class="hero">
       <div>
-        <h1>從一次日常的人犬相遇開始</h1>
-        <p class="lede">記下今天看見的事。填寫時，這一帶的地方資訊會浮現；經過檢核的紀錄，會累積成大家都能讀、能用的公開資料。</p>
-        <div class="cta"><button type="button" class="btn primary" data-go="record">記錄一次相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button></div>
+        <h1>讓牠們回家，讓牠們回來</h1>
+        <p class="lede">出門散步，看看附近的貓狗有沒有往回家的路前進，野生動物有沒有回來。每一隻動物的旅程由好幾個人一起完成，沒有人能一個人把牠帶走。</p>
+        <div class="cta"><button type="button" class="btn primary" data-go="record">記錄相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button></div>
       </div>
-      <figure class="hero-map">
-        <div class="map" id="homeMap"></div>
-        <figcaption>苗栗縣 2026 年 5 月至今，${n} 筆偶遇紀錄、${e} 次持續觀察（示例）。顏色越深紀錄越多，斜線是沒有資料。筆數受使用者人數與路線影響，不等於犬隻數量。</figcaption>
-      </figure>
+      <section class="score" aria-labelledby="scoreArea">
+        <p class="score-head"><b id="scoreArea">${esc(H.area)}</b><span>${esc(H.season)}</span><span class="sample">示例</span></p>
+        <div class="metric">
+          <h2>回家</h2>
+          <p class="big">${pct(st.homeRate)}<small>%</small></p>
+          <p>已知的 ${h.known} 隻街頭貓狗中，${h.home} 隻回家、${h.last} 隻成為最後一代。</p>
+          <p>本季新生幼崽 <b>${h.pups}</b> 隻，上季 ${h.pupsLast} 隻。越少越好。</p>
+          <details><summary>怎麼算</summary><p>${esc(H.howHome)}</p></details>
+        </div>
+        <div class="metric">
+          <h2>回來</h2>
+          <p class="big">${one(st.backRate)}<small> 種／小時</small></p>
+          <p>本季散步 ${b.walks} 次、共 ${b.hours} 小時，上季每小時 ${one(b.rateLast)} 種。常見的有${b.common.map(esc).join('、')}。</p>
+          <details><summary>怎麼算</summary><p>${esc(H.howBack)}</p></details>
+        </div>
+        <div class="goals">
+          <h3>本季勝利條件</h3>
+          <ul>${st.goals.map(goalHTML).join('')}</ul>
+          <p class="note">三項都達成，這一區本季就過關，參與的每個人得到同一枚徽章。沒有個人排行榜。</p>
+        </div>
+      </section>
     </section>
     <section class="block">
-      <h2 class="sec">送出紀錄代表什麼</h2>
-      <div class="paths">
-        <div class="path"><h3>觀察紀錄</h3><p class="here">這個網站</p><p>記下你看見的事，檢核後成為公開資料。不會有人因此到場。</p></div>
-        <div class="path"><h3>正式陳情</h3><p>需要公部門處理、回覆時，請走縣市政府的陳情管道。實際連結待查核。</p></div>
-        <div class="path"><h3>緊急協助</h3><p>有人身危險時撥 110 或 119。動物受傷受困的窗口待查核。</p></div>
+      <h2 class="sec">每一隻動物的回家旅程</h2>
+      <p class="sec-lede">每一關由不同的角色確認。動物回家時，一路參與的人一起得到「回家」徽章；很少被看見、高齡、黑色、怕人的個體進度加倍。</p>
+      <ol class="journey">${J.map((j, i) => `<li>
+        <p class="j-no">第 ${i + 1} 關</p>
+        <h3>${esc(j.step)}</h3>
+        <p class="j-who">由${esc(j.who)}確認</p>
+        <p>${esc(j.d)}</p>
+        <p class="j-n">${j.of ? `回家的 ${j.of} 隻中，${j.n} 隻已回報 30 天近況` : `目前 ${j.n} 隻`}<span class="sample">示例</span></p>
+      </li>`).join('')}</ol>
+      <div class="branch">
+        <h3>最後一代</h3>
+        <p>不適合家庭生活的個體，絕育後由照護者守護到終老，不再有下一代。絕育是止血，不是結局；牠變得親人時，可以回到「準備好」。目前 ${h.last} 隻。</p>
       </div>
     </section>
     <section class="block">
-      <h2 class="sec">最近的公開紀錄</h2>
-      <div class="stories two">${S.stories.slice(0, 4).map(storyHTML).join('')}</div>
-      <div class="cta"><button type="button" class="btn" data-go="nearby">看更多</button></div>
+      <h2 class="sec">看見受傷或受困的動物</h2>
+      <p class="sec-lede">請先聯絡緊急窗口，不用記錄相遇。這類狀況不進入遊戲，也不計分。有人身危險時撥 110 或 119；動物救援的在地窗口待查核。</p>
     </section>
     <section class="block invite">
-      <div><h2 class="sec">站定五分鐘</h2><p class="sec-lede">找一個點停下來，留意周遭的聲音與動靜。沒看到狗也要送出，那筆紀錄同樣有用。</p></div>
+      <div><h2 class="sec">站定五分鐘</h2><p class="sec-lede">找一個點停下來，留意周遭的動物與聲音。什麼都沒看到也要送出，這筆紀錄讓「回來」算得更準。</p></div>
       <button type="button" class="btn" data-go="survey">試試看</button>
     </section>
   </div>`;
-}
-function mountHome() {
-  const m = GeoMap($('#homeMap'), { static: true, label: '苗栗縣各村里的示例紀錄分布', labels: false });
-  const a = aggregate('vill');
-  m.fill(v => { const c = a.get(v.c); return c && c.n ? 'fq' + klass(c.n, BREAKS.vill) : 'hatch'; });
-  S.mapRefs.home = m;
 }
 
 /* ───────── 故事 ───────── */
@@ -1255,7 +1291,7 @@ function viewIssues() {
 }
 
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, mountHome], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();

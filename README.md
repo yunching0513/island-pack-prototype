@@ -1,10 +1,10 @@
-# 貓克敏（暫名）
+# 巷仔口：一起回家（暫名）
 
-**改版中。** 這個倉庫正從「島與群平台原型」改為「貓克敏」：用日常散步、像素動物卡與鄰里故事，促成街頭貓狗被收編。12/3 簡報前的工作與之後的階段見 [ROADMAP.md](ROADMAP.md)，待辦都在 [12/3 簡報里程碑](https://github.com/yunching0513/island-pack-prototype/milestone/1)。
+**改版中。** 這個倉庫正從「島與群平台原型」改為「巷仔口：一起回家」（原暫名「貓克敏」）：在日常散步中記下遇見的動物，大家一起讓街頭貓狗回家、讓野生動物回來。12/3 簡報前的工作與之後的階段見 [ROADMAP.md](ROADMAP.md)，待辦都在 [12/3 簡報里程碑](https://github.com/yunching0513/island-pack-prototype/milestone/1)。
 
-改版完成前，線上版仍是島與群原型：<https://yunching0513.github.io/island-pack-prototype/>。島與群版本保存在標籤 [`v0.3-island-pack`](https://github.com/yunching0513/island-pack-prototype/tree/v0.3-island-pack)。
+線上版：<https://yunching0513.github.io/island-pack-prototype/>。首頁已改成巷仔口，其他畫面仍是島與群原型，會陸續改版。島與群版本保存在標籤 [`v0.3-island-pack`](https://github.com/yunching0513/island-pack-prototype/tree/v0.3-island-pack)。
 
-## 目前線上版：島與群平台原型
+## 首頁以外的畫面：島與群平台原型
 
 遊蕩犬公民科學與開放資料平台的可操作原型，用於團隊討論，不是正式服務。
 
