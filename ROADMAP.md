@@ -1,6 +1,6 @@
-# 貓克敏開發路線
+# 巷仔口：一起回家　開發路線
 
-這個倉庫正從「島與群平台原型」改版為「貓克敏」（暫名）。島與群版本保存在標籤 [`v0.3-island-pack`](https://github.com/yunching0513/island-pack-prototype/tree/v0.3-island-pack)。
+這個倉庫正從「島與群平台原型」改版為「巷仔口：一起回家」（暫名，原暫名「貓克敏」；名稱待 11/26 工作會確認）。島與群版本保存在標籤 [`v0.3-island-pack`](https://github.com/yunching0513/island-pack-prototype/tree/v0.3-island-pack)。
 
 ## 核心：讓牠們回家，讓牠們回來
 
