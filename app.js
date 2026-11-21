@@ -256,12 +256,10 @@ const qualityOf = c => (c.qa >= c.qb && c.qa >= c.qc) ? 'A' : c.qb >= c.qc ? 'B'
 const areaName = (sc, key) => sc === 'town' ? key : sc === 'vill' ? `${byCode.get(key).t}${byCode.get(key).v}` : '';
 
 /* ───────── 狀態 ───────── */
+const newFeat = () => ({ coat: null, pattern: null, tail: null, age: null, sex: null, ear: null, body: [], react: null });
 const newDraft = () => ({
-  photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
-  adult: null, pup: null,
-  beh: { rest: null, eat: null, bark: null, chase: null },
-  clue: { collar: null, bowl: null, person: null, hurt: null },
-  hearsay: '', feel: [], feelText: '', pubPhoto: false, pubText: false,
+  species: null, hurt: false, photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
+  f: newFeat(), wild: null, n: 1, note: '', pubText: false,
 });
 const copy = o => JSON.parse(JSON.stringify(o));
 const newSurvey = () => ({ mode: 'point', phase: 'idle', t: 0, seen: 0, heard: 0, speed: 1, weather: '晴', period: '早上', extra: [] });
@@ -305,6 +303,78 @@ function scene({ masked = false } = {}) {
     <rect x="8" y="8" width="62" height="26" fill="var(--paper)" stroke="var(--figure)"/><text x="39" y="26" text-anchor="middle" font-size="15" fill="var(--figure)" font-family="var(--ui)">示例圖</text>
   </svg>`;
 }
+/* ───────── 像素形象：依特徵疊零件 ─────────
+   零件規格見 assets/README.md。身體與尾巴用四個代換色畫，這裡換成毛色；洋紅像素代表擦掉。 */
+const PX_EMPTY = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const REPL = [0x404040, 0x808080, 0xb0b0b0, 0xe0e0e0];
+const COATS = {
+  black: [0x1f1c1e, 0x2e2a2c, 0x454042, 0x5d5759], white: [0xb9b4aa, 0xd9d4ca, 0xeeeae2, 0xfbf9f4],
+  orange: [0x9a4f1a, 0xc96f2a, 0xe0954f, 0xf2c08a], gray: [0x4e5459, 0x717980, 0x949ca3, 0xbfc5ca],
+  brown: [0x4a3324, 0x6b4a33, 0x8c6849, 0xb38f6d], yellow: [0x8c6a2e, 0xb88f45, 0xd4b06c, 0xecd7a3],
+  unk: [0x8f8a9c, 0xb3aec0, 0xcbc7d6, 0xe2dfea], /* 毛色還不知道：淡紫灰，等其他人補上 */
+};
+const TAIL0 = { cat: 'normal', dog: 'curled' };
+const known = v => v && v !== 'unk' && v !== 'none';
+function spriteFiles(sp, f) {
+  if (sp === 'wild') return [`wild-${f.wild}-0.png`];
+  const end = `${f.age === 'juvenile' ? 'juvenile' : 'adult'}-stand`, o = [`${sp}-body-${end}-0.png`];
+  if (known(f.pattern)) o.push(`${sp}-pattern-${f.pattern}-${end}.png`);
+  o.push(`${sp}-tail-${known(f.tail) ? f.tail : TAIL0[sp]}-${end}.png`);
+  if (f.ear === 'left' || f.ear === 'right') o.push(`${sp}-ear-${f.ear}-flat-${end}.png`);
+  ['pregnant', 'tripod'].forEach(c => { if (f.body.includes(c)) o.push(`${sp}-condition-${c}-${end}.png`); });
+  o.push(`${sp}-face-normal-${end}.png`);
+  return o;
+}
+const pxImgs = new Map(), pxOut = new Map(), pxSpec = new Map();
+const loadPx = f => {
+  if (!pxImgs.has(f)) pxImgs.set(f, new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error(f)); i.src = 'assets/' + f; }));
+  return pxImgs.get(f);
+};
+async function composePx(key) {
+  if (pxOut.has(key)) return pxOut.get(key);
+  const { files, coat } = pxSpec.get(key), imgs = await Promise.all(files.map(loadPx));
+  const cv = document.createElement('canvas'); cv.width = cv.height = 48;
+  const x = cv.getContext('2d', { willReadFrequently: true }), out = x.createImageData(48, 48), o = out.data, pal = COATS[coat] || COATS.unk;
+  for (const im of imgs) {
+    x.clearRect(0, 0, 48, 48); x.drawImage(im, 0, 0);
+    const d = x.getImageData(0, 0, 48, 48).data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;
+      let c = d[i] << 16 | d[i + 1] << 8 | d[i + 2];
+      if (c === 0xff00ff) { o[i + 3] = 0; continue; }
+      const r = REPL.indexOf(c); if (r >= 0) c = pal[r];
+      o[i] = c >> 16; o[i + 1] = c >> 8 & 255; o[i + 2] = c & 255; o[i + 3] = 255;
+    }
+  }
+  x.putImageData(out, 0, 0);
+  const url = cv.toDataURL(); pxOut.set(key, url);
+  return url;
+}
+const encLabel = (list, v) => (list.find(([k]) => k === v) || [])[1] || '';
+function describe(sp, f, w) {
+  const E = C.ENC;
+  if (sp === 'wild') return w && w !== 'other' ? encLabel(E.wild, w) : '野生動物（種類待確認）';
+  const head = `${known(f.coat) ? encLabel(E.coat[sp], f.coat) + '色' : ''}${known(f.pattern) ? encLabel(E.pattern[sp], f.pattern) : ''}${known(f.age) ? encLabel(E.age, f.age) : ''}${encLabel(E.species, sp)}`;
+  const more = [known(f.sex) && encLabel(E.sex, f.sex), known(f.tail) && encLabel(E.tail[sp], f.tail), known(f.ear) && encLabel(E.ear, f.ear),
+    ...f.body.filter(known).map(b => encLabel(E.body, b)), known(f.react) && encLabel(E.react, f.react)].filter(Boolean);
+  return [head, ...more].join('，');
+}
+function spriteHTML(sp, f, w, big = false) {
+  const alt = `像素形象：${describe(sp, f, w)}（暫代圖）`;
+  if (sp === 'wild' && (!w || w === 'other')) return `<span class="px px-unk${big ? ' big' : ''}" role="img" aria-label="${esc(alt)}">?</span>`;
+  const files = spriteFiles(sp, { ...f, wild: w }), coat = sp === 'wild' ? null : known(f.coat) ? f.coat : 'unk';
+  const key = files.join('|') + '|' + coat;
+  pxSpec.set(key, { files, coat });
+  return `<img class="px${big ? ' big' : ''}" src="${pxOut.get(key) || PX_EMPTY}" data-px="${esc(key)}" width="48" height="48" alt="${esc(alt)}">`;
+}
+function paintPx() {
+  $$('img[data-px]').forEach(img => {
+    const u = pxOut.get(img.dataset.px);
+    if (u) { if (img.getAttribute('src') !== u) img.src = u; return; }
+    composePx(img.dataset.px).then(v => { img.src = v; }).catch(() => img.classList.add('px-miss'));
+  });
+}
+new MutationObserver(paintPx).observe(document.body, { childList: true, subtree: true });
 function toast(msg) {
   const t = $('#toast');
   t.textContent = msg; t.hidden = false;
@@ -329,7 +399,7 @@ function renderNav() {
 }
 const TIMING = {
   live: '即時：文件的原始構想。卡片隨填寫內容浮現。',
-  tier: '分級：安全提示即時出現，其他卡片等「今天看見」填完。',
+  tier: '分級：安全提示即時出現，其他卡片等「牠的特徵」填完。',
   after: '填完才看：所有卡片都等觀察確認之後。',
 };
 function renderRail() {
@@ -450,20 +520,12 @@ function storyHTML(s) {
 }
 
 /* ───────── 記錄一次相遇 ───────── */
-const STEPS = ['現場', '今天看見', '補充', '公開與送出'];
-const BEH = [['rest', '休息或走動'], ['eat', '進食'], ['bark', '吠叫'], ['chase', '追逐人或車']];
-const CLUE = [['collar', '項圈或牽繩'], ['bowl', '飼料碗或餵食痕跡'], ['person', '有人在場照顧'], ['hurt', '看起來受傷或受困']];
-const FEEL = [['road', '擔心犬隻跑上馬路'], ['self', '擔心自己或家人'], ['care', '想知道有沒有人在照顧'], ['help', '想知道是否已有團體協助'], ['join', '想一起幫忙']];
-const TAGS = { puppy: '你填了幼犬', bowl: '你看見飼料碗', chase: '你看見追逐', hurt: '你看見受傷或受困', wantHelp: '你想知道是否有人協助' };
-const hasCount = d => d.adult !== null || d.pup !== null;
+const STEPS = ['現場', '牠的特徵', '送出'];
+const TAGS = { puppy: '你看見幼犬' };
 
 function draftTags() {
   const d = S.draft, t = new Set();
-  if (typeof d.pup === 'number' && d.pup > 0) t.add('puppy');
-  if (d.clue.bowl === 'yes') t.add('bowl');
-  if (d.beh.chase === 'yes') t.add('chase');
-  if (d.clue.hurt === 'yes') t.add('hurt');
-  if (d.feel.includes('help')) t.add('wantHelp');
+  if (d.species === 'dog' && d.f.age === 'juvenile') t.add('puppy');
   return t;
 }
 function matchCards() {
@@ -534,7 +596,7 @@ function viewRecord() {
   if (S.submitted) return viewReceipt();
   return `<div class="page pad" id="recPage">
     <h1 style="font-size:clamp(30px,5cqi,40px)">記錄一次相遇</h1>
-    <p class="small">這是一筆觀察紀錄，不會派人到場。有人身危險請撥 110 或 119。</p>
+    <p class="small">貓、狗和野生動物都從這裡記。這是一筆相遇紀錄，不會派人到場；看見受傷或受困的動物，請先聯絡緊急窗口。</p>
     <ol class="steps" id="stepBar"></ol>
     <div class="rec-grid">
       <div class="rec-form" id="stepBody"></div>
@@ -550,8 +612,12 @@ const demoBtn = n => `<div class="demo"><button type="button" id="fill-${n}" dat
 function stepScene() {
   const d = S.draft;
   return `<h2>現場</h2>
-    <p class="safe">請站在安全距離，不要為了拍照靠近犬隻。</p>
+    <p class="safe">請站在安全距離，不要為了拍照靠近或餵食動物。</p>
     ${demoBtn(0)}
+    <div class="form-sec"><h3>遇見的是</h3>
+      <div class="chips" role="group" aria-label="遇見的是">${C.ENC.species.map(([k, l]) => `<button type="button" class="chip" id="sp-${k}" data-act="sp" data-v="${k}" ${pressed(d.species === k)}>${l}</button>`).join('')}</div>
+      <button type="button" class="chip" id="hurt-0" data-act="hurt">牠看起來受傷或受困</button>
+    </div>
     <div class="form-sec"><h3>位置</h3>
       <p class="step-note">實際版本會先用手機定位。原型請點地圖，或從下面的清單選擇。</p>
       <div class="map map-rec" id="recMap"></div>
@@ -573,7 +639,7 @@ function stepScene() {
         <button type="button" class="btn quiet sm" id="photoNone" data-act="photo-none">不放照片</button>
       </div>
       <div id="photoBox">${photoHTML()}</div>
-      <p class="note">照片只留在這個分頁，不會上傳。</p>
+      <p class="note">${esc(C.ENC.photoNote)}原型的照片只留在這個分頁，不會上傳。</p>
     </div>
     <div class="form-sec"><h3>時間</h3>
       <label class="field" for="obsWhen"><span>觀察時間</span><input type="datetime-local" id="obsWhen" data-bind="when" value="${d.when}"></label>
@@ -581,7 +647,7 @@ function stepScene() {
       <p class="note">觀察時間和上傳時間分開保存，避免把補登當成即時目擊。</p>
     </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
-    <div class="step-act"><button type="button" class="btn primary" id="next-0" data-act="step" data-n="1">下一步：今天看見</button></div>`;
+    <div class="step-act"><button type="button" class="btn primary" id="next-0" data-act="step" data-n="1">下一步：${d.species === 'wild' ? '是哪一種' : '牠的特徵'}</button></div>`;
 }
 const HINT = {
   start: '先點你所在的大概位置，地圖會放大；再點一下放下位置。',
@@ -600,120 +666,113 @@ const photoHTML = () => {
   if (!p) return '';
   return `<div class="photo-box">${p.kind === 'sample' ? scene() : `<img src="${p.url}" alt="你選的照片">`}</div>`;
 };
-function counterHTML(k, label, icon) {
-  const v = S.draft[k];
-  return `<div class="counter">
-    <span class="who"><svg aria-hidden="true"><use href="#${icon}"/></svg>${label}</span>
-    <span class="ctl">
-      <button type="button" id="dec-${k}" data-act="count" data-k="${k}" data-d="-1" aria-label="${label}減一">−</button>
-      <span class="val" aria-live="polite">${v === null ? '—' : v === 'unk' ? '?' : v}</span>
-      <button type="button" id="inc-${k}" data-act="count" data-k="${k}" data-d="1" aria-label="${label}加一">＋</button>
-      <button type="button" class="unk" id="unk-${k}" data-act="count-unk" data-k="${k}" ${pressed(v === 'unk')}>不知道</button>
-    </span>
-  </div>`;
+function pickHTML(k, list, label, { multi = false, unk = true } = {}) {
+  const f = S.draft.f, on = v => multi ? f[k].includes(v) : f[k] === v;
+  const all = unk ? [...list, ['unk', '不知道']] : list;
+  return `<div class="pick"><span class="lab">${label}</span><span class="chips" role="group" aria-label="${label}">${all.map(([v, l]) => `<button type="button" class="chip${v === 'unk' ? ' unk' : ''}" id="ft-${k}-${v}" data-act="ft" data-k="${k}" data-v="${v}" ${pressed(on(v))}>${l}</button>`).join('')}</span></div>`;
 }
-function triHTML(g, k, label) {
-  const v = S.draft[g][k], b = (val, t) => `<button type="button" id="tri-${k}-${val}" data-act="tri" data-g="${g}" data-k="${k}" data-v="${val}" ${pressed(v === val)}>${t}</button>`;
-  return `<div class="tri"><span class="lab">${label}</span><span class="seg" role="group" aria-label="${label}">${b('yes', '有')}${b('no', '未見')}${b('unk', '不知道')}</span></div>`;
+function avatarHTML() {
+  const d = S.draft;
+  return `<div class="avatar">${spriteHTML(d.species, d.f, d.wild, true)}<div><p><b>${esc(describe(d.species, d.f, d.wild))}</b></p>
+    <p class="note">形象由你填的特徵疊出來，同樣的特徵每次都畫出同一張圖；其他人補上特徵時，形象也會跟著變。目前是暫代圖。</p></div></div>`;
 }
-function stepSeen() {
-  return `<h2>今天看見</h2>
-    <p class="step-note"><span class="tag-seen">親眼看見</span> 這一頁只填你現在看到的事。聽來的事放到下一步。</p>
-    ${demoBtn(1)}
-    <div class="form-sec"><h3>同時看見幾隻</h3>
-      <div class="counters">${counterHTML('adult', '成犬', 'i-dog')}${counterHTML('pup', '幼犬', 'i-pup')}</div>
+function stepTraits() {
+  const d = S.draft, E = C.ENC, sp = d.species;
+  if (sp === 'wild') return `<h2>是哪一種</h2>
+    <p class="step-note">只記你看見的。不要靠近、追蹤或引誘牠；稀有物種的位置只會公開到區域。</p>
+    ${avatarHTML()}
+    <div class="form-sec"><h3>種類</h3>
+      <div class="chips" role="group" aria-label="種類">${E.wild.map(([k, l]) => `<button type="button" class="chip" id="wd-${k}" data-act="wild" data-v="${k}" ${pressed(d.wild === k)}>${l}</button>`).join('')}</div>
+      <p class="note">原型先放三種常見物種；完整的物種清單與每小時散步的努力量，下一版加入。</p>
     </div>
-    <div class="form-sec"><h3>正在發生什麼<small>可略過</small></h3>${BEH.map(([k, l]) => triHTML('beh', k, l)).join('')}</div>
-    <div class="form-sec"><h3>現場線索<small>可略過</small></h3>${CLUE.map(([k, l]) => triHTML('clue', k, l)).join('')}</div>
+    <div class="form-sec"><h3>同時看見幾隻</h3>
+      <div class="counter"><span class="who">隻數</span><span class="ctl">
+        <button type="button" id="dec-n" data-act="count" data-k="n" data-d="-1" aria-label="隻數減一">−</button>
+        <span class="val" aria-live="polite">${d.n}</span>
+        <button type="button" id="inc-n" data-act="count" data-k="n" data-d="1" aria-label="隻數加一">＋</button>
+      </span></div>
+    </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
       <button type="button" class="btn quiet" id="back-1" data-act="step" data-n="0">上一步</button>
-      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：補充</button>
-      <button type="button" class="btn sm" id="skip-1" data-act="step" data-n="3">略過補充，直接送出</button>
+      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：送出</button>
     </div>`;
-}
-function stepExtra() {
-  const d = S.draft;
-  return `<h2>補充</h2>
-    <p class="step-note">這一頁可以略過。寫在這裡的內容會保留情境，但不會算成今天的目擊。</p>
-    ${demoBtn(2)}
-    <div class="form-sec"><h3><span class="tag-heard">他人轉述</span></h3>
-      <label class="field" for="hearsay"><span>別人告訴你、但你沒有親眼看見的事</span>
-      <textarea id="hearsay" rows="3" data-bind="hearsay" placeholder="例如：鄰居說上個月有狗追機車">${esc(d.hearsay)}</textarea></label>
-    </div>
-    <div class="form-sec"><h3><span class="tag-felt">我的想法</span></h3>
-      <div class="chips">${FEEL.map(([k, l]) => `<button type="button" class="chip" id="feel-${k}" data-act="feel" data-k="${k}" ${pressed(d.feel.includes(k))}>${l}</button>`).join('')}</div>
-      <label class="field" for="feelText"><span>還想說的話</span><textarea id="feelText" rows="3" data-bind="feelText">${esc(d.feelText)}</textarea></label>
-    </div>
+  return `<h2>牠的特徵</h2>
+    <p class="step-note"><span class="tag-seen">親眼看見</span> 只填你看清楚的，看不清楚就選「不知道」。其他人之後可以補上。</p>
+    ${demoBtn(1)}
+    ${avatarHTML()}
+    <div class="form-sec"><h3>1　毛色</h3>${pickHTML('coat', E.coat[sp], '毛色')}${pickHTML('pattern', E.pattern[sp], '花紋')}${pickHTML('tail', E.tail[sp], '尾巴')}</div>
+    <div class="form-sec"><h3>2　生命階段</h3>${pickHTML('age', E.age, '生命階段')}</div>
+    <div class="form-sec"><h3>3　性別</h3>${pickHTML('sex', E.sex, '性別')}</div>
+    <div class="form-sec"><h3>4　剪耳</h3>${pickHTML('ear', E.ear, '剪耳')}<p class="note">${esc(E.earNote)}</p></div>
+    <div class="form-sec"><h3>5　特殊生理與受傷<small>可複選</small></h3>${pickHTML('body', E.body, '特殊生理', { multi: true })}
+      <button type="button" class="chip" id="hurt-1" data-act="hurt">牠看起來受傷或受困</button>
+      <p class="note">跛行與皮膚狀況只寫在文字裡，不會畫進形象。</p></div>
+    <div class="form-sec"><h3>6　行為反應</h3>${pickHTML('react', E.react, '行為反應')}</div>
+    <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
-      <button type="button" class="btn quiet" id="back-2" data-act="step" data-n="1">上一步</button>
-      <button type="button" class="btn primary" id="next-2" data-act="step" data-n="3">下一步：公開與送出</button>
+      <button type="button" class="btn quiet" id="back-1" data-act="step" data-n="0">上一步</button>
+      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：送出</button>
     </div>`;
 }
-const countText = d => {
-  const f = (v, l) => v === null ? '' : v === 'unk' ? `${l}數量不知道` : `${l} ${v} 隻`;
-  return [f(d.adult, '成犬'), f(d.pup, '幼犬')].filter(Boolean).join('、') || '未填';
-};
-const seenText = d => {
-  const yes = [...BEH, ...CLUE].filter(([k]) => (d.beh[k] ?? d.clue[k]) === 'yes').map(([, l]) => l);
-  const no = [...BEH, ...CLUE].filter(([k]) => (d.beh[k] ?? d.clue[k]) === 'no').map(([, l]) => '未見' + l);
-  return [countText(d), ...yes, ...no].join('、') + '。';
-};
-const feelText = d => [...FEEL.filter(([k]) => d.feel.includes(k)).map(([, l]) => l), d.feelText].filter(Boolean).join('；');
+function emergencyHTML() {
+  const e = C.ENC.emergency;
+  return `<h2>${esc(e.title)}</h2>
+    <p class="safe">${esc(e.lead)}</p>
+    <div class="form-sec"><h3>聯絡誰</h3><dl class="emg">${e.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+    <div class="form-sec"><h3>等待的時候</h3><ul class="after">${e.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
+    <div class="step-act">
+      <button type="button" class="btn primary" data-go="home">回首頁</button>
+      <button type="button" class="btn quiet" id="hurt-back" data-act="hurt-back">我按錯了，回到相遇</button>
+    </div>`;
+}
+const pubSummary = d => describe(d.species, d.f, d.wild) + (d.species === 'wild' ? `，${d.n} 隻` : '');
 function stepPublish() {
   const d = S.draft, p = d.pin;
   const [lon, lat] = p ? toLonLat(p.x, p.y) : ['—', '—'];
-  const hasText = d.hearsay || feelText(d);
-  return `<h2>公開與送出</h2>
-    <p class="step-note">你看見的事實會以聚合形式進入公開統計。照片和文字由你決定。</p>
-    ${demoBtn(3)}
-    <div class="form-sec"><h3>照片</h3>
-      <div class="seg" role="group" aria-label="照片是否公開">
-        <button type="button" id="pp-no" data-act="pub" data-k="pubPhoto" data-v="0" ${pressed(!d.pubPhoto)}>不公開</button>
-        <button type="button" id="pp-yes" data-act="pub" data-k="pubPhoto" data-v="1" ${pressed(d.pubPhoto)} ${d.photo ? '' : 'disabled'}>遮蔽後公開</button>
-      </div>
-      ${d.photo ? '' : '<p class="note">這筆紀錄沒有照片。</p>'}
-    </div>
-    <div class="form-sec"><h3>文字</h3>
+  return `<h2>送出</h2>
+    <p class="step-note">公開版本只到村里與月份。原始照片與精確位置只有團隊與照護者看得到。</p>
+    ${demoBtn(2)}
+    <div class="form-sec"><h3>想說的話<small>可略過</small></h3>
+      <p class="note">${esc(C.ENC.noteHint)}</p>
+      <label class="field" for="encNote"><span>一句話</span><textarea id="encNote" rows="3" data-bind="note" placeholder="例如：看起來很健康，警戒但不怕人">${esc(d.note)}</textarea></label>
       <div class="seg" role="group" aria-label="文字是否公開">
         <button type="button" id="pt-no" data-act="pub" data-k="pubText" data-v="0" ${pressed(!d.pubText)}>不公開</button>
-        <button type="button" id="pt-yes" data-act="pub" data-k="pubText" data-v="1" ${pressed(d.pubText)} ${hasText ? '' : 'disabled'}>願意公開</button>
+        <button type="button" id="pt-yes" data-act="pub" data-k="pubText" data-v="1" ${pressed(d.pubText)}>願意公開</button>
       </div>
-      ${hasText ? '' : '<p class="note">這筆紀錄沒有補充文字。</p>'}
     </div>
     <div class="form-sec"><h3>兩個版本的差別</h3>
       <div class="privacy">
         <div class="pv"><h4>公開版本</h4>
-          ${d.pubPhoto && d.photo ? `<div class="photo-box">${d.photo.kind === 'sample' ? scene({ masked: true }) : `<img src="${d.photo.url}" alt="" style="filter:blur(6px)">`}</div>` : ''}
-          <dl><dt>時間</dt><dd>${fmtMonth(d.when.slice(0, 7))}</dd><dt>區域</dt><dd>${p ? esc(p.town + p.vname) : '—'}</dd><dt>內容</dt><dd>${esc(seenText(d))}</dd>
-          ${d.pubText && d.hearsay ? `<dt>他人轉述</dt><dd>${esc(d.hearsay)}</dd>` : ''}
-          ${d.pubText && feelText(d) ? `<dt>想法</dt><dd>${esc(feelText(d))}</dd>` : ''}</dl>
+          <div class="pv-px">${spriteHTML(d.species, d.f, d.wild)}</div>
+          <dl><dt>時間</dt><dd>${fmtMonth(d.when.slice(0, 7))}</dd><dt>區域</dt><dd>${p ? esc(p.town + p.vname) : '—'}</dd><dt>內容</dt><dd>${esc(pubSummary(d))}</dd>
+          ${d.pubText && d.note ? `<dt>想說的話</dt><dd>${esc(d.note)}</dd>` : ''}</dl>
         </div>
         <div class="pv raw"><h4>平台保留，不公開</h4>
-          <dl><dt>精確位置</dt><dd class="mono">${lat}, ${lon}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd class="mono">2026-11-07 ${d.late ? '12:30' : '07:44'}</dd><dt>原始照片</dt><dd>${d.photo ? '含定位資訊的原檔' : '無'}</dd></dl>
+          <dl><dt>精確位置</dt><dd class="mono">${lat}, ${lon}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd class="mono">2026-11-07 ${d.late ? '12:30' : '07:44'}</dd><dt>原始照片</dt><dd>${d.photo ? '只給照護者比對是不是同一隻' : '無'}</dd></dl>
         </div>
       </div>
     </div>
     <div class="form-sec"><h3>送出之後</h3>
       <ul class="after">
-        <li>團隊檢核後才會公開，照片會移除定位資訊並遮蔽門牌與人臉。</li>
-        <li>你可以之後要求更正或下架。</li>
+        <li>團隊檢核後才會公開。地圖上的動物位置只到村里或地標。</li>
+        ${d.species === 'wild' ? '<li>這筆相遇會算進這一區的「回來」。</li>' : '<li>系統會找出「可能是同一隻」的紀錄，由照護者確認後併進牠的個體卡。</li>'}
         <li class="no">不會有人因這筆紀錄到場。</li>
-        <li class="no">這不是陳情，公部門不會因此回覆你。</li>
+        <li class="no">抓捕、靠近餵食與追蹤稀有物種都不給分。</li>
       </ul>
     </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
-      <button type="button" class="btn quiet" id="back-3" data-act="step" data-n="2">上一步</button>
-      <button type="button" class="btn primary" id="submit" data-act="submit">送出紀錄</button>
+      <button type="button" class="btn quiet" id="back-2" data-act="step" data-n="1">上一步</button>
+      <button type="button" class="btn primary" id="submit" data-act="submit">送出相遇</button>
     </div>`;
 }
 function renderStep() {
   const fid = document.activeElement?.id;
   S.mapRefs.rec?.destroy(); S.mapRefs.rec = null;
-  $('#stepBody').innerHTML = [stepScene, stepSeen, stepExtra, stepPublish][S.step]();
+  $('#stepBody').innerHTML = S.draft.hurt ? emergencyHTML() : [stepScene, stepTraits, stepPublish][S.step]();
   renderStepBar();
-  if (S.step === 0) mountRecMap();
+  if (S.step === 0 && !S.draft.hurt) mountRecMap();
   renderCards();
   if (fid) document.getElementById(fid)?.focus({ preventScroll: true });
 }
@@ -750,8 +809,9 @@ function setPin(x, y, v) {
 }
 function goStep(n) {
   if (n > S.step) {
+    if (n >= 1 && !S.draft.species) { S.err = '先選遇見的是貓、狗還是野生動物。'; return showErr(); }
     if (n >= 1 && !S.draft.pin) { S.err = '還需要位置。請在地圖上點一下。'; return showErr(); }
-    if (n >= 2 && !hasCount(S.draft)) { S.err = '還需要犬隻數量。看不清楚可以選「不知道」。'; if (S.step !== 1) { S.step = 1; renderStep(); } return showErr(); }
+    if (n >= 2 && S.draft.species === 'wild' && !S.draft.wild) { S.err = '選一個種類；認不出來可以選「其他或認不出來」。'; if (S.step !== 1) { S.step = 1; renderStep(); } return showErr(); }
   }
   S.err = ''; S.step = n;
   renderStep();
@@ -762,20 +822,18 @@ function fillScenario(n) {
   const d = S.draft;
   if (n === 0) {
     d.photo = { kind: 'sample' };
+    if (!d.species) d.species = 'cat';
     const v = G.villages.find(x => x.t === '銅鑼鄉' && x.v === '銅鑼村');
+    renderStep();
     setPin(v.x + 12, v.y + 8, v);
     S.mapRefs.rec?.fit(v.bb, .9);
-    $('#photoBox').innerHTML = photoHTML();
   } else if (n === 1) {
-    const steps = [() => { d.adult = 1; d.beh.rest = 'yes'; }, () => { d.pup = 3; }, () => { d.clue.bowl = 'yes'; d.beh.chase = 'no'; d.clue.collar = 'unk'; }];
-    steps.forEach((f, i) => setTimeout(() => { if (S.view === 'record' && S.step === 1) { f(); renderStep(); } }, i * 750));
-  } else if (n === 2) {
-    d.hearsay = '聽說附近曾有狗追車，但今天沒有親眼看見。';
-    d.feel = ['road', 'help'];
-    d.feelText = '路很窄，車子開得快。';
-    renderStep();
+    const f = d.f, dog = d.species === 'dog';
+    const steps = [() => { f.coat = dog ? 'yellow' : 'orange'; }, () => { f.pattern = dog ? 'chest' : 'tabby'; f.tail = dog ? 'curled' : 'kinked'; }, () => { f.age = 'adult'; f.sex = 'm'; }, () => { f.ear = 'left'; }, () => { f.react = 'keep'; }];
+    steps.forEach((g, i) => setTimeout(() => { if (S.view === 'record' && S.step === 1) { g(); renderStep(); } }, i * 700));
   } else {
-    d.pubPhoto = !!d.photo; d.pubText = !!(d.hearsay || feelText(d));
+    d.note = '看起來很健康，警戒但不怕人。';
+    d.pubText = true;
     renderStep();
   }
 }
@@ -783,9 +841,9 @@ function viewReceipt() {
   const t = S.submitted, st = t.state || 'review';
   const idx = { review: 1, published: 3, stats: 3, returned: 1 }[st];
   return `<div class="page pad">
-    <h1 style="font-size:clamp(30px,5cqi,40px)">紀錄已送出</h1>
+    <h1 style="font-size:clamp(30px,5cqi,40px)">相遇已送出</h1>
     <div class="receipt">
-      <p class="id">${t.id}</p>
+      <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
       <p class="step-note">${esc(t.place)}。${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
@@ -802,13 +860,12 @@ function viewReceipt() {
 }
 function submitRecord() {
   const d = S.draft;
-  if (!d.pin) { S.err = '還需要位置。'; return showErr(); }
-  if (!hasCount(d)) { S.err = '還需要犬隻數量。'; return showErr(); }
+  if (!d.pin || !d.species) { S.err = '還需要位置和動物種類。'; return showErr(); }
   const t = {
     id: `OB-20261107-0${512 + S.done.length + S.queue.length}`, place: `${d.pin.town} ${d.pin.vname}`, time: d.when.replace('T', ' '), late: d.late, mine: true,
-    user: { adult: d.adult, pup: d.pup, photo: !!d.photo, text: [d.hearsay && `他人轉述：${d.hearsay}`, feelText(d) && `想法：${feelText(d)}`].filter(Boolean).join('\n') || '（沒有補充文字）' },
-    ai: { adult: typeof d.adult === 'number' ? d.adult : null, pup: typeof d.pup === 'number' ? d.pup : null, note: d.hearsay ? '文字含他人轉述，已和今天的觀察分開存放' : '沒有需要留意的內容' },
-    flags: d.pubPhoto && d.photo ? ['photoPlate'] : [], flagNote: d.pubPhoto && d.photo ? '公開照片要先遮蔽門牌與人臉' : '', fixed: [], human: {}, draft: copy(d),
+    user: { summary: pubSummary(d), photo: !!d.photo, text: d.note ? `想說的話（${d.pubText ? '願意公開' : '不公開'}）：${d.note}` : '（沒有補充文字）' },
+    ai: { note: d.species === 'wild' ? '野生動物相遇；稀有物種公開時只到區域' : '找到 0 筆可能是同一隻的紀錄（示例）' },
+    flags: [], flagNote: '', fixed: [], human: {}, draft: copy(d),
   };
   if (d.photo?.kind === 'file') t.draft.photo = d.photo;
   S.queue.unshift(t);
@@ -1167,8 +1224,8 @@ function ticketHTML(t) {
     ${t.flagNote ? `<p class="flag">${esc(t.flagNote)}${open.length ? '' : '，已處理'}</p>` : ''}
     <div class="ticket-grid ${hp ? 'has-photo' : ''}">
       <div>
-        <table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
-        <tbody>${row('成犬', 'adult')}${t.user.pup !== undefined && t.user.pup !== 0 ? row('幼犬', 'pup') : ''}</tbody></table>
+        ${t.user.summary ? `<div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild)}<p><b>${esc(t.user.summary)}</b></p></div>` : `<table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
+        <tbody>${row('成犬', 'adult')}${t.user.pup !== undefined && t.user.pup !== 0 ? row('幼犬', 'pup') : ''}</tbody></table>`}
         <p class="small" style="margin-top:8px;white-space:pre-line">${esc(t.user.text)}</p>
         <p class="note" style="margin-top:4px">AI 備註：${esc(t.ai.note)}</p>
       </div>
@@ -1233,17 +1290,16 @@ function decide(id, result, publish) {
     if (publish) {
       D.records.push({ x: d.pin.x, y: d.pin.y, vill: d.pin.code, town: d.pin.town, month: d.when.slice(0, 7), q: d.photo ? 'A' : 'B' });
       if (publish === 'full') {
-        const text = d.pubText;
+        const text = d.pubText && d.note;
         S.stories.unshift({
-          id: t.id, kind: text && (d.hearsay || feelText(d)) ? 'experience' : 'sighting', who: '你剛送出的紀錄', town: d.pin.town, month: d.when.slice(0, 7),
-          photo: d.pubPhoto && d.photo?.kind === 'sample', title: `${d.pin.vname}的一次相遇`, seen: seenText(d),
-          heard: text ? d.hearsay : '', felt: text ? feelText(d) : '',
+          id: t.id, kind: text ? 'experience' : 'sighting', who: '你剛送出的紀錄', town: d.pin.town, month: d.when.slice(0, 7),
+          title: `${d.pin.vname}的一次相遇`, seen: pubSummary(d) + '。', felt: text ? d.note : '',
         });
         S.nb.town = 'all'; S.nb.month = 'all';
       }
     }
   }
-  toast(publish === 'full' ? '已核准。公開版本已進入「看看附近」。' : publish === 'stats' ? '已列入統計，文字與照片不公開。' : '已退回。');
+  toast(publish === 'full' ? '已核准。公開版本已進入「看看附近」。' : publish === 'stats' ? '已列入統計，文字不公開。' : '已退回。');
   rerender();
 }
 
@@ -1347,19 +1403,27 @@ const ACT = {
   prec(t) { S.draft.precision = t.dataset.v; $$('[data-act="prec"]').forEach(b => b.setAttribute('aria-pressed', b === t)); },
   late(t) { S.draft.late = !S.draft.late; t.setAttribute('aria-pressed', S.draft.late); },
   'photo-sample'() { S.draft.photo = { kind: 'sample' }; $('#photoBox').innerHTML = photoHTML(); },
-  'photo-none'() { S.draft.photo = null; S.draft.pubPhoto = false; $('#photoBox').innerHTML = ''; },
-  count(t) {
-    const k = t.dataset.k, cur = S.draft[k], n = typeof cur === 'number' ? cur : 0;
-    S.draft[k] = clamp(n + +t.dataset.d, 0, 30);
+  'photo-none'() { S.draft.photo = null; $('#photoBox').innerHTML = ''; },
+  sp(t) {
+    const d = S.draft;
+    if (d.species !== t.dataset.v) { d.species = t.dataset.v; d.f = newFeat(); d.wild = null; d.n = 1; }
     S.err = ''; renderStep();
   },
-  'count-unk'(t) { const k = t.dataset.k; S.draft[k] = S.draft[k] === 'unk' ? null : 'unk'; S.err = ''; renderStep(); },
-  tri(t) { const { g, k, v } = t.dataset; S.draft[g][k] = S.draft[g][k] === v ? null : v; renderStep(); },
-  feel(t) {
-    const f = S.draft.feel, k = t.dataset.k, i = f.indexOf(k);
-    if (i >= 0) f.splice(i, 1); else f.push(k);
-    t.setAttribute('aria-pressed', i < 0);
-    renderCards();
+  hurt() { S.draft.hurt = true; S.err = ''; renderStep(); scrollTop($('#recPage')); },
+  'hurt-back'() { S.draft.hurt = false; renderStep(); },
+  ft(t) {
+    const { k, v } = t.dataset, f = S.draft.f;
+    if (k === 'body') {
+      if (v === 'unk') f.body = f.body.includes('unk') ? [] : ['unk'];
+      else { f.body = f.body.filter(x => x !== 'unk'); const i = f.body.indexOf(v); if (i >= 0) f.body.splice(i, 1); else f.body.push(v); }
+    } else f[k] = f[k] === v ? null : v;
+    renderStep();
+  },
+  wild(t) { S.draft.wild = S.draft.wild === t.dataset.v ? null : t.dataset.v; S.err = ''; renderStep(); },
+  count(t) {
+    const k = t.dataset.k, cur = S.draft[k], n = typeof cur === 'number' ? cur : 0;
+    S.draft[k] = clamp(n + +t.dataset.d, 1, 30);
+    S.err = ''; renderStep();
   },
   pub(t) { S.draft[t.dataset.k] = t.dataset.v === '1'; renderStep(); },
   card(t) { S.openCard = S.openCard === t.dataset.id ? null : t.dataset.id; renderCards(); document.getElementById(t.id)?.focus({ preventScroll: true }); },

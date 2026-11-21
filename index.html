@@ -277,7 +277,7 @@ section.block>p,.sec-lede{max-width:36em;margin-top:var(--s2)}
 figcaption{font-size:14px;line-height:1.6;color:var(--muted);margin-top:var(--s2)}
 
 /* ── 記錄流程 ── */
-.steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s1);margin-top:var(--s3)}
+.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s1);margin-top:var(--s3)}
 .steps button{all:unset;cursor:pointer;display:block;border-top:4px solid var(--rule2);padding-top:6px;font-size:15px;line-height:1.4;color:var(--muted)}
 .steps button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .steps button.done{border-top-color:var(--ink);color:var(--ink)}
@@ -548,6 +548,23 @@ td.mono{white-space:nowrap}
 body[data-device="phone"] .app{border-radius:30px}
 @media (max-width:1099px){.rail{border-radius:var(--r-lg) var(--r-lg) 0 0}}
 @container app (max-width:699.98px){.rec-cards{border-radius:var(--r-lg) var(--r-lg) 0 0}}
+/* 相遇：像素形象與特徵 */
+.px{width:96px;height:96px;flex:none;image-rendering:pixelated;image-rendering:crisp-edges;background:#efeadf;border-radius:var(--r);padding:4px;box-sizing:content-box}
+.px.big{width:144px;height:144px}
+.px-unk{display:grid;place-items:center;font-size:40px;font-weight:700;color:#1e1a24}
+.px-miss{outline:1px dashed var(--ink)}
+.avatar{display:flex;gap:var(--s3);align-items:center;background:var(--paper2);border-radius:var(--r-lg);padding:var(--s2) var(--s3);margin-top:var(--s3);min-width:0}
+.avatar>div{min-width:0}
+.avatar p+p{margin-top:var(--s1)}
+@container app (max-width:439px){.avatar{flex-direction:column;align-items:flex-start}}
+.pick{display:grid;gap:var(--s1);border-top:1px solid var(--rule2);padding-top:var(--s2)}
+.pick .lab{font-size:17px;line-height:1.5}
+.chip.unk{border-style:dashed}
+.chip.unk[aria-pressed="true"]{border-style:solid}
+.pv-px{margin-bottom:var(--s2)}
+.pv-px .px{width:72px;height:72px}
+dl.emg{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:var(--s1) var(--s3);font-size:16px;line-height:1.6}
+dl.emg dt{font-weight:700}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
