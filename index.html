@@ -563,6 +563,43 @@ body[data-device="phone"] .app{border-radius:30px}
 .chip.unk[aria-pressed="true"]{border-style:solid}
 .pv-px{margin-bottom:var(--s2)}
 .pv-px .px{width:72px;height:72px}
+/* 個體卡（#26） */
+.px.sm{width:64px;height:64px}
+.a-list{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2);grid-template-columns:minmax(0,1fr)}
+@container app (min-width:560px){.a-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@container app (min-width:900px){.a-list{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.a-mini{all:unset;box-sizing:border-box;cursor:pointer;display:flex;gap:var(--s3);align-items:center;width:100%;height:100%;background:var(--paper2);border-radius:var(--r);padding:var(--s2) var(--s3)}
+.a-mini:hover{box-shadow:inset 0 0 0 1px var(--ink)}
+.a-mini:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.a-mini>span{display:grid;gap:2px;min-width:0}
+.a-mini b{font-size:18px;line-height:1.4}
+.a-mini-sub{font-size:14px;line-height:1.5;color:var(--muted)}
+.badge{display:inline-block;justify-self:start;font-size:13px;line-height:1.5;font-weight:700;padding:0 8px;border:1px solid var(--ink);border-radius:999px}
+.badges{display:flex;flex-wrap:wrap;gap:6px}
+.a-name{font-size:clamp(28px,5cqi,36px);line-height:1.3;overflow-wrap:anywhere}
+.double{margin-top:var(--s3);background:var(--paper2);border-radius:var(--r);padding:10px 14px;max-width:40em;font-size:16px;line-height:1.7}
+.a-journey li.done{background:var(--paper2)}
+.a-journey li.cur{background:transparent;box-shadow:inset 0 0 0 2px var(--ink)}
+.a-journey li.todo,.a-journey li.paused{background:transparent;box-shadow:inset 0 0 0 1px var(--rule);color:var(--muted)}
+.a-journey li.todo h3,.a-journey li.paused h3{color:var(--ink)}
+.a-journey .j-no{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center}
+.a-journey .st{font-size:12px;line-height:1.5;font-weight:700;padding:0 8px;border:1px solid currentColor;border-radius:999px}
+.a-journey li.done .st{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.squad{list-style:none;padding:0;margin:var(--s3) 0 0;display:flex;flex-wrap:wrap;gap:var(--s2)}
+.squad li{display:inline-flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;background:var(--paper2);border-radius:999px;font-size:15px;line-height:1.4}
+.who-ic{display:grid;place-items:center;width:32px;height:32px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12px;font-weight:700}
+.noms,.cands,.diary{list-style:none;padding:0;margin:var(--s3) 0 0;max-width:40em}
+.noms li{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:var(--s2);border-top:1px solid var(--rule2);padding-block:var(--s2)}
+.nom-add{display:flex;flex-wrap:wrap;gap:var(--s2);align-items:flex-end;margin-top:var(--s3);max-width:40em}
+.nom-add .field{flex:1 1 200px}
+.cands li{display:flex;gap:var(--s3);align-items:flex-start;border-top:1px solid var(--rule2);padding-block:var(--s3)}
+.cands li>div{min-width:0}
+.cands .mono{overflow-wrap:anywhere}
+@container app (max-width:439px){.cands li{flex-direction:column}}
+.diary li{border-top:1px solid var(--rule2);padding-block:var(--s2);font-size:16px;line-height:1.7}
+.d-meta{font-size:14px;color:var(--muted)}
+#animalPage .form-sec .step-act{margin-top:0}
+#diaryWarn .step-act{margin-top:var(--s2);border-top:0;padding-top:0}
 dl.emg{display:grid;grid-template-columns:minmax(0,auto) minmax(0,1fr);gap:var(--s1) var(--s3);font-size:16px;line-height:1.6}
 dl.emg dt{font-weight:700}
 </style>

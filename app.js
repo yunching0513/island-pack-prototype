@@ -272,6 +272,7 @@ const S = {
   ad: { tab: 'queue' },
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
+  animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
 };
 
 /* ───────── 共用片段 ───────── */
@@ -493,6 +494,11 @@ function viewHome() {
       </div>
     </section>
     <section class="block">
+      <h2 class="sec">附近的牠們</h2>
+      <p class="sec-lede">每一隻都有自己的個體卡：走到第幾關、由誰確認、一起參與的小隊，還有鄰里取的名字和日記。<span class="sample">示例</span></p>
+      <ul class="a-list">${S.animals.map(animalMini).join('')}</ul>
+    </section>
+    <section class="block">
       <h2 class="sec">看見受傷或受困的動物</h2>
       <p class="sec-lede">請先聯絡緊急窗口，不用記錄相遇。這類狀況不進入遊戲，也不計分。有人身危險時撥 110 或 119；動物救援的在地窗口待查核。</p>
     </section>
@@ -517,6 +523,117 @@ function storyHTML(s) {
       ${s.note ? `<dt>編輯說明</dt><dd class="ed">${esc(s.note)}</dd>` : ''}
     </dl>
   </article>`;
+}
+
+/* ───────── 個體卡（#26） ─────────
+   多筆相遇併成同一隻動物的卡片。位置只到地標一帶；併卡、定名由照護者確認，原型裡用虛線按鈕示範。 */
+const kn = v => v != null && v !== 'unk';
+const featOf = f => ({ ...newFeat(), ...f });
+const findAnimal = id => S.animals.find(a => a.id === id);
+const reachedText = a => a.branch === 'last' ? '最後一代，由照護者守護' : a.done ? `第 ${a.done} 關：${C.JOURNEY[a.done - 1].step}` : '還沒開始';
+const roleTag = (role, tag) => `${C.ROLES[role]} ${tag}`;
+function rareOf(a) {
+  const o = [];
+  if (a.seen < 3) o.push('seldom');
+  if (a.f.age === 'senior') o.push('senior');
+  if (a.f.coat === 'black') o.push('black');
+  if (a.f.react === 'hide') o.push('shy');
+  return o;
+}
+/* 「可能是同一隻」：同物種、同鄉鎮，兩邊都填了的特徵不能矛盾，而且至少兩項相同 */
+const MATCH = [['coat', '毛色'], ['pattern', '花紋'], ['tail', '尾巴'], ['ear', '剪耳'], ['sex', '性別']];
+function sameWhy(a, sp, f, town) {
+  if (a.sp !== sp || a.town !== town) return null;
+  if (f.age === 'juvenile' && a.f.age === 'senior') return null;
+  const why = [];
+  for (const [k, l] of MATCH) {
+    const x = f[k], y = a.f[k];
+    if (!kn(x) || !kn(y)) continue;
+    if (x !== y) return null;
+    why.push(`${l}相同`);
+  }
+  return why.length >= 2 ? [...why, `都在${town}`] : null;
+}
+function animalMini(a) {
+  return `<li><button type="button" class="a-mini" id="am-${a.id}" data-act="animal" data-id="${a.id}">
+    ${spriteHTML(a.sp, featOf(a.f), null).replace('class="px', 'class="px sm')}
+    <span><b>${esc(a.name || '還沒有名字')}</b><span class="a-mini-sub">${esc(reachedText(a))}</span><span class="a-mini-sub">${esc(a.town)}・${esc(a.area)}</span>${rareOf(a).length ? '<span class="badge">進度加倍</span>' : ''}</span>
+  </button></li>`;
+}
+function riskyHits(s) {
+  const words = C.ANIMAL.risky.filter(w => s.includes(w));
+  const nums = s.match(/[0-9０-９]+\s*(點|時|號|樓|巷|弄)|[一二三四五六七八九十兩]+(點[半多鐘左前後]|時|號|樓|巷|弄)/g) || [];
+  return [...new Set([...words, ...nums])];
+}
+function viewAnimal() {
+  const a = findAnimal(S.aid) || S.animals[0], A = C.ANIMAL, J = C.JOURNEY, f = featOf(a.f), r = rareOf(a);
+  S.aid = a.id;
+  const stages = J.map((j, i) => {
+    const st = i < a.done ? 'done' : a.branch === 'last' && i >= 3 ? 'paused' : i === a.done ? 'cur' : 'todo';
+    const lg = a.log[i];
+    const line = st === 'done' ? `${esc(j.who)} ${esc(lg[1])} 確認，${fmtMonth(lg[0])}` : st === 'cur' ? `等待${esc(j.who)}確認` : st === 'paused' ? '暫停：牠目前是最後一代' : `由${esc(j.who)}確認`;
+    return `<li class="${st}"${st === 'cur' ? ' aria-current="step"' : ''}>
+      <p class="j-no">第 ${i + 1} 關<span class="st">${{ done: '完成', cur: '進行中', paused: '暫停', todo: '還沒到' }[st]}</span></p>
+      <h3>${esc(j.step)}</h3><p>${line}</p></li>`;
+  }).join('');
+  const top = [...a.noms].sort((p, q) => q[1] - p[1])[0];
+  const nameSec = a.name
+    ? `<p>由鄰里提名、${top ? top[1] : 0} 票選出，照護者確認後寫上卡片。</p>`
+    : `<p class="note">${esc(A.nameNote)}</p>
+      ${a.noms.length ? `<ul class="noms">${a.noms.map(([n, v], i) => {
+        const did = S.voted.includes(a.id + n);
+        return `<li><span><b>${esc(n)}</b>　${v} 票</span><button type="button" class="btn sm" id="nv-${i}" data-act="nom-vote" data-i="${i}" ${did ? 'disabled' : ''}>${did ? '已投' : '投這個名字'}</button></li>`;
+      }).join('')}</ul>` : '<p>還沒有人提名。</p>'}
+      <div class="nom-add"><label class="field" for="nomIn"><span>提名一個名字</span><input type="text" id="nomIn" maxlength="8" data-ui="nom" value="${esc(S.nomText)}"></label><button type="button" class="btn" id="nom-add" data-act="nom-add">提名</button></div>
+      ${a.noms.length ? '<div class="demo"><button type="button" id="nom-fix" data-act="nom-fix">原型示範：照護者以最多票的名字定名</button></div>' : ''}`;
+  const cands = a.cands.map((c, i) => {
+    const why = sameWhy(a, a.sp, c.f, c.town) || ['特徵相近'];
+    return `<li>${spriteHTML(a.sp, featOf(c.f), null).replace('class="px', 'class="px sm')}
+      <div><p><b>${c.mine ? '你剛送出的相遇' : '一筆相遇'}</b>　<span class="mono">${esc(c.id)}</span></p>
+      <p class="note">${fmtMonth(c.month)}・${esc(c.town)}・${esc(why.join('、'))}</p>
+      <div class="demo"><button type="button" id="cy-${i}" data-act="cand-yes" data-i="${i}">原型示範：照護者確認是同一隻</button><button type="button" id="cn-${i}" data-act="cand-no" data-i="${i}">不是同一隻</button></div></div></li>`;
+  }).join('');
+  const hits = S.diaryHits;
+  return `<div class="page pad" id="animalPage">
+    <p><button type="button" class="btn quiet sm" data-go="home">回首頁</button></p>
+    <div class="avatar a-head">${spriteHTML(a.sp, f, null, true)}<div>
+      <h1 class="a-name">${esc(a.name || '還沒有名字')} <span class="sample">示例</span></h1>
+      <p><b>${esc(describe(a.sp, f, null))}</b></p>
+      <p class="note">${esc(a.town)}・${esc(a.area)}。被看見 ${a.seen} 次，最近一次在${fmtMonth(a.last)}。</p>
+      ${r.length ? `<p class="badges">${r.map(k => `<span class="badge">${esc(C.RARE[k])}</span>`).join('')}</p>` : ''}
+    </div></div>
+    ${r.length ? `<p class="double"><b>冷門個體，進度加倍。</b>${esc(A.rareNote)}</p>` : ''}
+    <p class="note" style="margin-top:8px">${esc(A.sampleNote)}</p>
+    <section class="block"><h2 class="sec">回家旅程</h2>
+      <p class="sec-lede">${esc(reachedText(a))}。每一關由不同的角色確認。</p>
+      <ol class="journey a-journey">${stages}</ol>
+      ${a.branch === 'last' ? `<div class="branch"><h3>最後一代</h3><p>${esc(A.lastNote)}</p></div>` : ''}
+      ${a.done >= 6 ? '<div class="branch"><h3>旅程完成</h3><p>牠回家了，也回報了近況。小隊裡的每個人一起得到「回家」徽章。</p></div>' : ''}
+    </section>
+    <section class="block"><h2 class="sec">小隊 ${a.squad.length} 人</h2>
+      <p class="sec-lede">${esc(A.squadNote)}</p>
+      <ul class="squad">${a.squad.map(([role, tag]) => `<li><span class="who-ic" aria-hidden="true">${esc(tag.slice(0, 2))}</span>${esc(roleTag(role, tag))}</li>`).join('')}</ul>
+    </section>
+    <section class="block"><h2 class="sec">名字</h2>${nameSec}</section>
+    ${a.cands.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2><p class="sec-lede">${esc(A.candNote)}</p><ul class="cands">${cands}</ul></section>` : ''}
+    <section class="block"><h2 class="sec">日記</h2>
+      <div class="form-sec">
+        <label class="field" for="diaryIn"><span>寫一則日記</span><textarea id="diaryIn" rows="3" data-ui="diary" aria-describedby="diaryHint">${esc(S.diaryText)}</textarea></label>
+        <p class="note" id="diaryHint">${esc(A.diaryHint)}</p>
+        ${hits ? `<div class="verdict risk" role="alert" id="diaryWarn"><p><b>${esc(A.diaryWarn)}</b>：「${hits.map(esc).join('」「')}」。這些資訊會讓動物被找到，送出前請再看一次。</p>
+          <div class="step-act"><button type="button" class="btn" id="diary-edit" data-act="diary-edit">回去修改</button><button type="button" class="btn quiet" id="diary-force" data-act="diary-force">確定沒有透露，送出</button></div></div>`
+        : '<div class="step-act"><button type="button" class="btn primary" id="diary-send" data-act="diary-send">送出日記</button></div>'}
+      </div>
+      ${a.diary.length ? `<ul class="diary">${a.diary.map(([m, role, tag, text]) => `<li><p class="d-meta">${esc(roleTag(role, tag))}・${fmtMonth(m)}</p><p>${esc(text)}</p></li>`).join('')}</ul>` : '<p class="note">還沒有日記。</p>'}
+    </section>
+  </div>`;
+}
+function postDiary() {
+  const a = findAnimal(S.aid);
+  a.diary.unshift(['2026-11', 'story', '你', S.diaryText.trim()]);
+  if (!a.squad.some(([, t]) => t === '你')) a.squad.push(['story', '你']);
+  S.diaryText = ''; S.diaryHits = null;
+  rerender(); toast('日記已送出。');
 }
 
 /* ───────── 記錄一次相遇 ───────── */
@@ -847,6 +964,10 @@ function viewReceipt() {
       <p class="step-note">${esc(t.place)}。${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
+    ${t.cands?.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2>
+      <p class="sec-lede">${esc(C.ANIMAL.candNote)}</p>
+      <ul class="a-list">${t.cands.map(id => animalMini(findAnimal(id))).join('')}</ul>
+    </section>` : ''}
     <section class="block"><h2 class="sec">下一步</h2>
       <div class="next two">
         <button type="button" class="btn primary" data-go="nearby">看看附近</button>
@@ -868,6 +989,12 @@ function submitRecord() {
     flags: [], flagNote: '', fixed: [], human: {}, draft: copy(d),
   };
   if (d.photo?.kind === 'file') t.draft.photo = d.photo;
+  if (d.species !== 'wild') {
+    const hits = S.animals.filter(a => sameWhy(a, d.species, d.f, d.pin.town));
+    hits.forEach(a => a.cands.unshift({ id: t.id, month: d.when.slice(0, 7), town: d.pin.town, f: copy(d.f), mine: true }));
+    t.cands = hits.map(a => a.id);
+    t.ai.note = `找到 ${hits.length} 張可能是同一隻的個體卡（示例），等照護者確認`;
+  }
   S.queue.unshift(t);
   S.submitted = t;
   render();
@@ -1347,7 +1474,7 @@ function viewIssues() {
 }
 
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();
@@ -1384,7 +1511,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES) });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1464,6 +1591,35 @@ const ACT = {
   'ad-return'(t) { decide(t.dataset.id, '退回', null); },
   'card-off'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.off = !c.off; rerender(); },
   'card-extend'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.valid = '2027-06-30'; toast('已延長到 2027-06-30。下次填寫時會再浮現。'); rerender(); },
+  animal(t) { S.aid = t.dataset.id; S.diaryHits = null; S.nomText = ''; go('animal'); },
+  'nom-vote'(t) { const a = findAnimal(S.aid), n = a.noms[+t.dataset.i]; n[1]++; S.voted.push(a.id + n[0]); rerender(); toast(`已投給「${n[0]}」。`); },
+  'nom-add'() {
+    const a = findAnimal(S.aid), n = S.nomText.trim();
+    if (!n) { toast('先寫一個名字。'); $('#nomIn')?.focus(); return; }
+    const hit = a.noms.find(x => x[0] === n);
+    if (hit) { if (!S.voted.includes(a.id + n)) { hit[1]++; S.voted.push(a.id + n); } }
+    else { a.noms.push([n, 1]); S.voted.push(a.id + n); }
+    S.nomText = ''; rerender(); toast(`已提名「${n}」。`);
+  },
+  'nom-fix'() { const a = findAnimal(S.aid); a.name = [...a.noms].sort((p, q) => q[1] - p[1])[0][0]; rerender(); toast(`照護者確認了名字：${a.name}。`); },
+  'cand-yes'(t) {
+    const a = findAnimal(S.aid), [c] = a.cands.splice(+t.dataset.i, 1);
+    a.seen++; if (c.month > a.last) a.last = c.month;
+    if (a.done < 2) { a.done = 2; a.log[1] = ['2026-11', 'C1']; }
+    if (!a.squad.some(([r, g]) => r === 'carer')) a.squad.push(['carer', 'C1']);
+    if (c.mine && !a.squad.some(([, g]) => g === '你')) a.squad.push(['walker', '你']);
+    rerender(); toast(`已併進${a.name || '這隻'}的個體卡。`);
+  },
+  'cand-no'(t) { const a = findAnimal(S.aid); a.cands.splice(+t.dataset.i, 1); rerender(); toast('已標為不是同一隻。這筆相遇會留著，等系統找其他候選。'); },
+  'diary-send'() {
+    const s = S.diaryText.trim();
+    if (!s) { toast('先寫幾個字。'); $('#diaryIn')?.focus(); return; }
+    const h = riskyHits(s);
+    if (h.length) { S.diaryHits = h; rerender(); $('#diary-edit')?.focus(); return; }
+    postDiary();
+  },
+  'diary-edit'() { S.diaryHits = null; rerender(); $('#diaryIn')?.focus(); },
+  'diary-force'() { postDiary(); },
   'req-done'(t) { S.requests.find(x => x.id === t.dataset.id).state = '已完成'; rerender(); },
 };
 document.addEventListener('click', e => {
@@ -1475,8 +1631,13 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.bind) { S.draft[t.dataset.bind] = t.value; }
+  else if (t.dataset.ui === 'nom') { S.nomText = t.value; }
+  else if (t.dataset.ui === 'diary') { S.diaryText = t.value; if (S.diaryHits) { S.diaryHits = null; const w = $('#diaryWarn'); if (w) w.outerHTML = '<div class="step-act"><button type="button" class="btn primary" id="diary-send" data-act="diary-send">送出日記</button></div>'; } }
   else if (t.dataset.dx === 'k') { S.dx.k = +t.value; $('#dxKv').textContent = t.value; updateData(); }
   else if (t.dataset.human) { S.queue.find(x => x.id === t.dataset.human).human[t.dataset.k] = t.value; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'nomIn' && !e.isComposing) { e.preventDefault(); ACT['nom-add'](); }
 });
 document.addEventListener('change', e => {
   const t = e.target;

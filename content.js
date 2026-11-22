@@ -221,6 +221,74 @@ window.CONTENT = {
     { step: '回訪', who: '中途與家', d: '7、30、90 天回報近況。', n: 13, of: 21 },
   ],
 
+  /* 個體卡（#26）。動物全是示例，不是真實個體；位置只到地標一帶。
+     done 是已完成幾關（0–6）；log 依序是每一關的確認月份與確認者的匿名化身，角色見 JOURNEY 的 who。
+     branch: 'last' 表示絕育後走「最後一代」，由照護者守護。cands 是系統找到、等照護者確認的「可能是同一隻」。 */
+  ROLES: { walker: '散步者', carer: '照護者', eco: '生態守望者', story: '說故事的人', foster: '中途與家', neighbor: '鄰居' },
+  RARE: { seldom: '很少被看見', senior: '高齡', black: '黑色', shy: '怕人' },
+  ANIMALS: [
+    {
+      id: 'a1', sp: 'cat', town: '銅鑼鄉', area: '車站一帶', seen: 14, last: '2026-11',
+      f: { coat: 'orange', pattern: 'tabby', tail: 'kinked', age: 'adult', sex: 'm', ear: 'left', react: 'keep' },
+      name: '麒麟', noms: [['麒麟', 9], ['橘子', 4]], done: 3,
+      log: [['2026-06', 'A7'], ['2026-07', 'C2'], ['2026-08', 'C2']],
+      squad: [['walker', 'A7'], ['walker', 'B3'], ['carer', 'C2'], ['story', 'S1'], ['neighbor', 'N4']],
+      diary: [['2026-10', 'story', 'S1', '麒麟最近胖了一點，尾巴那個彎在陽光下很好認。'], ['2026-08', 'carer', 'C2', '絕育後恢復得很好，第三天就回到平常的樣子。']],
+      cands: [],
+    },
+    {
+      id: 'a2', sp: 'cat', town: '銅鑼鄉', area: '老街一帶', seen: 6, last: '2026-10',
+      f: { coat: 'black', pattern: 'none', tail: 'normal', age: 'adult', sex: 'f', ear: 'right', react: 'hide' },
+      name: null, noms: [['墨墨', 4], ['小夜', 3], ['芝麻', 1]], done: 3, branch: 'last',
+      log: [['2026-05', 'B3'], ['2026-06', 'C5'], ['2026-07', 'C5']],
+      squad: [['walker', 'B3'], ['carer', 'C5'], ['neighbor', 'N1'], ['neighbor', 'N4']],
+      diary: [['2026-09', 'carer', 'C5', '還是不讓人靠近，但會在固定的人離開後才出來吃。這樣也很好。']],
+      cands: [],
+    },
+    {
+      id: 'a3', sp: 'dog', town: '銅鑼鄉', area: '國小附近', seen: 22, last: '2026-11',
+      f: { coat: 'yellow', pattern: 'chest', tail: 'curled', age: 'senior', sex: 'm', ear: 'left', react: 'near' },
+      name: '阿福', noms: [['阿福', 12]], done: 4,
+      log: [['2026-05', 'A2'], ['2026-05', 'C2'], ['2026-06', 'C2'], ['2026-10', 'H1']],
+      squad: [['walker', 'A2'], ['walker', 'A7'], ['carer', 'C2'], ['foster', 'H1'], ['story', 'S3'], ['neighbor', 'N2']],
+      diary: [['2026-10', 'foster', 'H1', '健康檢查通過，牙齒有點老了，但很愛散步。正在找願意陪老狗的家。']],
+      cands: [],
+    },
+    {
+      id: 'a4', sp: 'cat', town: '銅鑼鄉', area: '市場一帶', seen: 2, last: '2026-11',
+      f: { coat: 'white', pattern: 'white-tabby', tail: 'short', age: 'juvenile', sex: 'unk', ear: 'none', react: 'calm' },
+      name: null, noms: [], done: 1,
+      log: [['2026-11', 'B8']],
+      squad: [['walker', 'B8']],
+      diary: [],
+      cands: [
+        { id: 'OB-20261104-0471', month: '2026-11', town: '銅鑼鄉', f: { coat: 'white', pattern: 'white-tabby', tail: 'short', age: 'juvenile', ear: 'none' } },
+        { id: 'OB-20261105-0489', month: '2026-11', town: '銅鑼鄉', f: { coat: 'white', pattern: 'white-tabby', tail: 'unk', age: 'juvenile', ear: 'unk' } },
+      ],
+    },
+    {
+      id: 'a5', sp: 'dog', town: '銅鑼鄉', area: '河堤一帶', seen: 31, last: '2026-09',
+      f: { coat: 'brown', pattern: 'piebald', tail: 'drooped', age: 'adult', sex: 'f', ear: 'right', react: 'calm' },
+      name: '小花', noms: [['小花', 15], ['豆豆', 6]], done: 6,
+      log: [['2026-03', 'A2'], ['2026-03', 'C7'], ['2026-04', 'C7'], ['2026-06', 'H4'], ['2026-07', 'H4'], ['2026-08', 'H4']],
+      squad: [['walker', 'A2'], ['walker', 'B3'], ['carer', 'C7'], ['foster', 'H4'], ['story', 'S1'], ['neighbor', 'N3'], ['neighbor', 'N5']],
+      diary: [['2026-08', 'foster', 'H4', '回家 30 天：小花學會在門口等人，新家說牠是全家最早起床的。']],
+      cands: [],
+    },
+  ],
+  ANIMAL: {
+    sampleNote: '示例動物，不是真實個體。位置只顯示到地標一帶，不會出現精確座標。',
+    rareNote: '越少人注意的個體越需要幫忙。牠每往前一關，小隊得到的進度算兩倍。',
+    squadNote: '小隊是一路參與牠旅程的人，以匿名化身出現。地圖上看不到彼此的位置。',
+    lastNote: '牠不適合家庭生活，絕育後由照護者守護到終老，不再有下一代。絕育是止血，不是結局；牠變得親人時，可以回到「準備好」。',
+    nameNote: '名字由鄰里提名、大家一起選，照護者確認後才寫上卡片。',
+    candNote: '系統依特徵與區域找出可能是同一隻的相遇。照護者看過照片後確認，才會併進這張卡片。',
+    diaryHint: '寫下牠的樣子和改變就好。請不要寫地點、門牌、餵食時間或每天出沒的時段，這些資訊會讓動物被找到。',
+    diaryWarn: '這段文字看起來寫到了時間或地點',
+    /* 日記送出前檢查的字詞：時間、作息與地點。另外「數字＋點、時、號、樓、巷、弄」在 app.js 用規則找 */
+    risky: ['每天', '每晚', '每早', '固定', '幾點', '清晨', '早上', '中午', '傍晚', '晚上', '半夜', '門口', '路口', '地址', '巷子', '對面', '隔壁'],
+  },
+
   REPO: 'https://github.com/yunching0513/island-pack-prototype',
   THREADS: { h1: 1, h2: 2, r1: 3, r2: 4, r3: 5, r4: 6, s1: 7, s2: 8, s3: 9, n1: 10, n2: 11, n3: 12, d1: 13, d2: 14, d3: 15, a1: 16, a2: 17, a3: 18, x1: 19, x2: 20, x3: 21, x4: 22 },
 
