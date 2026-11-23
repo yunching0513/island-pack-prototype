@@ -33,6 +33,14 @@ python3 -m http.server 8765
 
 然後開啟 <http://localhost:8765>。
 
+## 自動測試
+
+```bash
+node tests/e2e.mjs
+```
+
+需要 Node 22 以上與 Google Chrome，不用安裝套件。會以無頭 Chrome 點過回家旅程，並檢查 1360、375、320px 的淺色與深色模式都沒有橫向捲動、主控台沒有錯誤。加 `--shots` 會把手機截圖存到 `tests/shots/`。
+
 ## 檔案
 
 - `index.html`：樣式與頁面骨架
