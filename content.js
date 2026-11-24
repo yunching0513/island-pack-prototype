@@ -415,7 +415,6 @@ window.CONTENT = {
     /* 只有懷孕與三腳畫進形象；其他寫在文字裡，不畫傷口 */
     body: [['pregnant', '懷孕'], ['tripod', '三隻腳'], ['thin', '偏瘦'], ['limp', '跛行或皮膚狀況']],
     react: [['near', '主動靠近人'], ['calm', '不靠近也不躲'], ['keep', '保持距離'], ['hide', '躲起來或跑開']],
-    wild: [['night-heron', '黑冠麻鷺'], ['red-bellied-squirrel', '赤腹松鼠'], ['light-vented-bulbul', '白頭翁'], ['other', '其他或認不出來']],
     earNote: '剪耳是絕育後的記號，台灣常見公剪左耳、母剪右耳。',
     photoNote: '照片只給照護者比對是不是同一隻，前台不會顯示原始照片。',
     noteHint: '請不要寫確切地點、餵食時間或每天出沒的時段，這些資訊會讓動物被找到。',
@@ -425,6 +424,62 @@ window.CONTENT = {
       rows: [['有人身危險', '撥 110 或 119'], ['動物受傷或受困', '地方動物保護窗口，查核後填入'], ['夜間或假日', '查核後填入']],
       tips: ['保持距離，不要徒手抓。', '如果安全，記下大概位置，告訴救援窗口。', '不用拍照上傳，也不用填特徵。'],
     },
+  },
+
+  /* 野生動物相遇與物種卡（#36）。和貓狗用同一個相遇入口；認出種就選種，認不出就選類群。
+     key 對應 assets/wild-<key>-0.png。物種卡內容全是示例，名單與文字待野保顧問確認、撰寫。
+     rec 是示例地區本季「有記錄到這一種的散步次數」，分母是 HOME.back.walks：只講紀錄與努力量，不講族群數量。
+     sensitive 的物種公開時只到鄉鎮，並延後 delay 天。 */
+  WILD: {
+    groups: [
+      ['bird', '鳥類', ['night-heron', 'light-vented-bulbul', 'group-bird']],
+      ['mammal', '哺乳類', ['red-bellied-squirrel', 'leopard-cat', 'group-squirrel']],
+      ['herp', '爬行與兩棲', ['swinhoe-lizard', 'group-frog']],
+    ],
+    cues: [['seen', '看見'], ['heard', '聽見']],
+    delay: 30,
+    unlocked: ['light-vented-bulbul'], /* 示例：你之前記錄過白頭翁 */
+    pickNote: '認不出是哪一種，選類群也可以；類群一樣算進「回來」的努力量，認出種之後才會解鎖物種卡。',
+    cardNote: '這張卡是示例，內容待野保專家撰寫。',
+    recNote: '這是有記錄到牠的散步次數，不是牠的數量：同一隻可能被記很多次，沒記到也不代表牠不在。',
+    groupNote: '這筆記到類群，算進這一區的「回來」。下次認出是哪一種，就能解鎖物種卡。',
+    otherNote: '這筆算進這一區的「回來」。認不出來沒關係，照實記錄比猜一個名字更有用。',
+  },
+  SPECIES: {
+    'night-heron': {
+      name: '黑冠麻鷺', group: 'bird', rec: 31,
+      lead: '在草地上慢慢走，看見人就定住不動的褐色大鳥。',
+      look: ['成鳥背部紅褐色，頭頂黑色；幼鳥灰褐色帶細斑', '常在公園、校園草地找蚯蚓'],
+      tips: ['牠定住不動是在警戒，請繞開，不要靠近拍照。'],
+    },
+    'light-vented-bulbul': {
+      name: '白頭翁', group: 'bird', rec: 58,
+      lead: '頭頂後方一塊白色，叫聲響亮，常成群出現在行道樹上。',
+      look: ['頭頂黑、後腦白，背部橄欖綠', '城市裡最常聽見的鳥之一'],
+      tips: ['聽見也可以記，選「聽見」。'],
+    },
+    'red-bellied-squirrel': {
+      name: '赤腹松鼠', group: 'mammal', rec: 22,
+      lead: '在樹上跑跳、尾巴蓬鬆，肚子帶紅褐色。',
+      look: ['背部灰褐，腹部紅褐', '白天活動，常在公園樹上'],
+      tips: ['不要餵食；餵食會讓牠靠近人與車道。'],
+    },
+    'leopard-cat': {
+      name: '石虎', group: 'mammal', rec: 2, sensitive: true,
+      lead: '台灣淺山的小型野生貓科，耳背有白斑、額頭有兩條白線。',
+      look: ['體型和家貓差不多，身上有斑點', '多在夜間與晨昏活動'],
+      tips: ['不要追蹤、靠近或引誘；看見了照實記錄就好。', '這一區是敏感區：不設餵食點，區內貓狗的回家旅程優先。'],
+    },
+    'swinhoe-lizard': {
+      name: '斯文豪氏攀蜥', group: 'herp', rec: 14,
+      lead: '常趴在樹幹上曬太陽的蜥蜴，背上有一條淡色縱帶。',
+      look: ['身體褐綠色，會隨溫度變深變淺', '白天在樹幹、圍牆上'],
+      tips: ['不要抓；斷尾對牠是很大的負擔。'],
+    },
+    'group-bird': { name: '鳥類（還沒認出種）', group: 'bird', rank: 'group' },
+    'group-squirrel': { name: '松鼠類（還沒認出種）', group: 'mammal', rank: 'group' },
+    'group-frog': { name: '蛙類（還沒認出種）', group: 'herp', rank: 'group' },
+    other: { name: '其他或認不出來', rank: 'other' },
   },
 
   /* 文件圖一，加上原型目前的狀態 */

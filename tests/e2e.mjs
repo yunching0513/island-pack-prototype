@@ -133,9 +133,56 @@ async function journey() {
   });
 }
 
+async function wildRecord(k, cue = 'seen') {
+  // 從回條按「再記一筆」才不會重新載入，已解鎖的物種卡留在記憶體裡
+  if (await has('[data-act="again"]')) await click('[data-act="again"]'); else await open('record');
+  await click('#sp-wild'); await click('#fill-0'); await sleep(100); await click('#next-0');
+  if (cue !== 'seen') await click(`#cue-${cue}`);
+  await click(`#wd-${k}`); await click('#next-1');
+}
+async function wildlife() {
+  console.log('野生動物相遇與物種卡（#36）');
+  await size(375);
+  await check('種類分成鳥類、哺乳類、爬行與兩棲，另有類群與「其他」', async () => {
+    await open('record'); await click('#sp-wild'); await click('#fill-0'); await sleep(100); await click('#next-0');
+    const labs = await js(`[...document.querySelectorAll('#stepBody .pick .lab')].map(e => e.textContent)`);
+    return ['鳥類', '哺乳類', '爬行與兩棲'].every(l => labs.includes(l)) && await has('#wd-group-bird') && await has('#wd-group-frog') && await has('#wd-other');
+  });
+  await check('可以選「聽見」，隻數標題跟著改', async () => { await click('#cue-heard'); return (await text('#stepBody')).includes('同時聽見幾隻'); });
+  await check('選了敏感物種會提醒只公開到鄉鎮', async () => { await click('#wd-leopard-cat'); return (await text('#stepBody .safe')).includes('只到鄉鎮'); });
+  await check('敏感物種的公開版本只到鄉鎮、延後 30 天', async () => {
+    await click('#next-1');
+    const pub = await text('.pv:not(.raw)');
+    await shot('wild-1-publish');
+    return pub.includes('敏感物種只到鄉鎮') && pub.includes('延後 30 天') && !pub.includes('銅鑼村') && pub.includes('聽見 1 隻');
+  });
+  await check('第一次記錄到這一種，解鎖物種卡並標示「示例，待專家撰寫」', async () => {
+    await click('#submit');
+    await shot('wild-2-unlock');
+    return (await text('#dexHead')) === '解鎖新的物種卡' && (await text('.sp-card')).includes('示例，待專家撰寫');
+  });
+  await check('物種卡只講紀錄與努力量，不寫族群數量', async () => {
+    const t = await text('.sp-card');
+    return t.includes('次散步中，有') && t.includes('不是牠的數量') && !/族群|約\s*[0-9０-９]+\s*隻|估計/.test(t);
+  });
+  await check('同一種再記一次不會重複解鎖', async () => { await wildRecord('light-vented-bulbul'); await click('#submit'); return (await text('#dexHead')) === '這一種你記錄過了'; });
+  await check('一般物種的公開版本到村里', async () => { await wildRecord('night-heron'); const ok = (await text('.pv:not(.raw)')).includes('銅鑼鄉銅鑼村'); await click('#submit'); return ok; });
+  await check('只認出類群：算進「回來」，不解鎖物種卡', async () => {
+    await wildRecord('group-bird'); await click('#submit');
+    return !(await has('.sp-card')) && (await text('#view')).includes('認出是哪一種，就能解鎖');
+  });
+  await check('物種卡頁：已解鎖的可以打開，沒解鎖的不顯示名字', async () => {
+    await click('#rc-dex');
+    const locked = await js(`document.querySelectorAll('.dex .locked').length`), names = await text('.dex');
+    await click('#dx-leopard-cat'); await shot('wild-3-dex');
+    return locked === 2 && !names.includes('斯文豪氏攀蜥') && names.includes('石虎') && names.includes('黑冠麻鷺') && (await text('#spOpen')).includes('不設餵食點');
+  });
+  await check('首頁「回來」可以進物種卡', async () => { await open('home'); await click('#home-dex'); return (await text('h1')) === '物種卡'; });
+}
+
 async function layout() {
   console.log('版面：沒有橫向捲動');
-  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal'];
+  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal', 'dex'];
   for (const w of [1360, 375, 320]) for (const dark of [false, true]) {
     await size(w, dark);
     const bad = [];
@@ -146,6 +193,9 @@ async function layout() {
       if (step === 'home') { for (const k of ['plan', 'net', 'vet', 'chip', 'kit']) await click(`#ac-${k}`); await click('#ad-go'); }
       const o = await overflow(); if (o > 0) bad.push(`animal:${step || 'apply'}(${o}px)`);
     }
+    await wildRecord('leopard-cat', 'heard'); let o = await overflow(); if (o > 0) bad.push(`wild:traits/publish(${o}px)`);
+    await click('#submit'); o = await overflow(); if (o > 0) bad.push(`wild:receipt(${o}px)`);
+    await click('#rc-dex'); await click('#dx-leopard-cat'); o = await overflow(); if (o > 0) bad.push(`dex:open(${o}px)`);
     await check(`${w}px ${dark ? '深色' : '淺色'}`, () => { if (bad.length) throw new Error(bad.join('、')); });
   }
 }
@@ -162,6 +212,7 @@ async function targets() {
 try {
   await connect();
   await journey();
+  await wildlife();
   await targets();
   await layout();
   await check('主控台沒有錯誤', () => { const p = problems.filter(x => !/favicon|ERR_FILE_NOT_FOUND|fonts\.g/.test(x)); if (p.length) throw new Error(p.slice(0, 3).join(' / ')); });

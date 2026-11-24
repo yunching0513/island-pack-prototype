@@ -259,7 +259,7 @@ const areaName = (sc, key) => sc === 'town' ? key : sc === 'vill' ? `${byCode.ge
 const newFeat = () => ({ coat: null, pattern: null, tail: null, age: null, sex: null, ear: null, body: [], react: null });
 const newDraft = () => ({
   species: null, hurt: false, photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
-  f: newFeat(), wild: null, n: 1, note: '', pubText: false,
+  f: newFeat(), wild: null, cue: 'seen', n: 1, note: '', pubText: false,
 });
 const copy = o => JSON.parse(JSON.stringify(o));
 const newSurvey = () => ({ mode: 'point', phase: 'idle', t: 0, seen: 0, heard: 0, speed: 1, weather: '晴', period: '早上', extra: [] });
@@ -273,6 +273,7 @@ const S = {
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
   animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
+  dex: new Set(C.WILD.unlocked), spid: null,
 };
 
 /* ───────── 共用片段 ───────── */
@@ -354,7 +355,7 @@ async function composePx(key) {
 const encLabel = (list, v) => (list.find(([k]) => k === v) || [])[1] || '';
 function describe(sp, f, w) {
   const E = C.ENC;
-  if (sp === 'wild') return w && w !== 'other' ? encLabel(E.wild, w) : '野生動物（種類待確認）';
+  if (sp === 'wild') return w && w !== 'other' ? C.SPECIES[w].name : '野生動物（種類待確認）';
   const head = `${known(f.coat) ? encLabel(E.coat[sp], f.coat) + '色' : ''}${known(f.pattern) ? encLabel(E.pattern[sp], f.pattern) : ''}${known(f.age) ? encLabel(E.age, f.age) : ''}${encLabel(E.species, sp)}`;
   const more = [known(f.sex) && encLabel(E.sex, f.sex), known(f.tail) && encLabel(E.tail[sp], f.tail), known(f.ear) && encLabel(E.ear, f.ear),
     ...f.body.filter(known).map(b => encLabel(E.body, b)), known(f.react) && encLabel(E.react, f.react)].filter(Boolean);
@@ -470,6 +471,7 @@ function viewHome() {
           <p class="big">${one(st.backRate)}<small> 種／小時</small></p>
           <p>本季散步 ${b.walks} 次、共 ${b.hours} 小時，上季每小時 ${one(b.rateLast)} 種。常見的有${b.common.map(esc).join('、')}。</p>
           <details><summary>怎麼算</summary><p>${esc(H.howBack)}</p></details>
+          <button type="button" class="btn sm" id="home-dex" data-act="dex">物種卡：已解鎖 ${SP_KEYS().filter(k => S.dex.has(k)).length} 張</button>
         </div>
         <div class="goals">
           <h3>本季勝利條件</h3>
@@ -842,16 +844,26 @@ function avatarHTML() {
   return `<div class="avatar">${spriteHTML(d.species, d.f, d.wild, true)}<div><p><b>${esc(describe(d.species, d.f, d.wild))}</b></p>
     <p class="note">形象由你填的特徵疊出來，同樣的特徵每次都畫出同一張圖；其他人補上特徵時，形象也會跟著變。目前是暫代圖。</p></div></div>`;
 }
+const wildChip = k => {
+  const s = C.SPECIES[k], d = S.draft;
+  return `<button type="button" class="chip${s.rank ? ' unk' : ''}" id="wd-${k}" data-act="wild" data-v="${k}" ${pressed(d.wild === k)}>${esc(s.name.replace('（還沒認出種）', '，認不出種'))}${s.sensitive ? '<span class="chip-tag">敏感</span>' : ''}</button>`;
+};
 function stepTraits() {
-  const d = S.draft, E = C.ENC, sp = d.species;
+  const d = S.draft, E = C.ENC, W = C.WILD, sp = d.species;
   if (sp === 'wild') return `<h2>是哪一種</h2>
     <p class="step-note">只記你看見的。不要靠近、追蹤或引誘牠；稀有物種的位置只會公開到區域。</p>
     ${avatarHTML()}
-    <div class="form-sec"><h3>種類</h3>
-      <div class="chips" role="group" aria-label="種類">${E.wild.map(([k, l]) => `<button type="button" class="chip" id="wd-${k}" data-act="wild" data-v="${k}" ${pressed(d.wild === k)}>${l}</button>`).join('')}</div>
-      <p class="note">原型先放三種常見物種；完整的物種清單與每小時散步的努力量，下一版加入。</p>
+    <div class="form-sec"><h3>看見還是聽見</h3>
+      <div class="seg" role="group" aria-label="看見還是聽見">${W.cues.map(([k, l]) => `<button type="button" id="cue-${k}" data-act="cue" data-v="${k}" ${pressed(d.cue === k)}>${l}</button>`).join('')}</div>
     </div>
-    <div class="form-sec"><h3>同時看見幾隻</h3>
+    <div class="form-sec"><h3>種類</h3>
+      <p class="note">${esc(W.pickNote)}</p>
+      ${W.groups.map(([g, gl, keys]) => `<div class="pick"><span class="lab">${gl}</span><span class="chips" role="group" aria-label="${gl}">${keys.map(k => wildChip(k)).join('')}</span></div>`).join('')}
+      <div class="pick"><span class="lab">都不是</span><span class="chips">${wildChip('other')}</span></div>
+      ${d.wild && C.SPECIES[d.wild].sensitive ? `<p class="safe">${esc(C.SPECIES[d.wild].name)}是敏感物種：公開時只到鄉鎮，並延後 ${W.delay} 天顯示。請不要追蹤或靠近。</p>` : ''}
+    </div>
+    <div class="form-sec"><h3>同時${cueLabel(d)}幾隻</h3>
+      ${d.cue === 'heard' ? '<p class="note">聽見的不確定有幾隻，就填 1。</p>' : ''}
       <div class="counter"><span class="who">隻數</span><span class="ctl">
         <button type="button" id="dec-n" data-act="count" data-k="n" data-d="-1" aria-label="隻數減一">−</button>
         <span class="val" aria-live="polite">${d.n}</span>
@@ -892,12 +904,17 @@ function emergencyHTML() {
       <button type="button" class="btn quiet" id="hurt-back" data-act="hurt-back">我按錯了，回到相遇</button>
     </div>`;
 }
-const pubSummary = d => describe(d.species, d.f, d.wild) + (d.species === 'wild' ? `，${d.n} 隻` : '');
+const cueLabel = d => encLabel(C.WILD.cues, d.cue);
+const pubSummary = d => describe(d.species, d.f, d.wild) + (d.species === 'wild' ? `，${cueLabel(d)} ${d.n} 隻` : '');
+const isSensitive = d => d.species === 'wild' && !!C.SPECIES[d.wild]?.sensitive;
+/* 公開版本的區域與時間：敏感物種只到鄉鎮，並延後顯示 */
+const pubArea = d => !d.pin ? '—' : isSensitive(d) ? `${d.pin.town}（敏感物種只到鄉鎮）` : d.pin.town + d.pin.vname;
+const pubWhen = d => fmtMonth(d.when.slice(0, 7)) + (isSensitive(d) ? `，延後 ${C.WILD.delay} 天才公開` : '');
 function stepPublish() {
   const d = S.draft, p = d.pin;
   const [lon, lat] = p ? toLonLat(p.x, p.y) : ['—', '—'];
   return `<h2>送出</h2>
-    <p class="step-note">公開版本只到村里與月份。原始照片與精確位置只有團隊與照護者看得到。</p>
+    <p class="step-note">${isSensitive(d) ? `敏感物種的公開版本只到鄉鎮，並延後 ${C.WILD.delay} 天。` : '公開版本只到村里與月份。'}原始照片與精確位置只有團隊與照護者看得到。</p>
     ${demoBtn(2)}
     <div class="form-sec"><h3>想說的話<small>可略過</small></h3>
       <p class="note">${esc(C.ENC.noteHint)}</p>
@@ -911,7 +928,7 @@ function stepPublish() {
       <div class="privacy">
         <div class="pv"><h4>公開版本</h4>
           <div class="pv-px">${spriteHTML(d.species, d.f, d.wild)}</div>
-          <dl><dt>時間</dt><dd>${fmtMonth(d.when.slice(0, 7))}</dd><dt>區域</dt><dd>${p ? esc(p.town + p.vname) : '—'}</dd><dt>內容</dt><dd>${esc(pubSummary(d))}</dd>
+          <dl><dt>時間</dt><dd>${esc(pubWhen(d))}</dd><dt>區域</dt><dd>${esc(pubArea(d))}</dd><dt>內容</dt><dd>${esc(pubSummary(d))}</dd>
           ${d.pubText && d.note ? `<dt>想說的話</dt><dd>${esc(d.note)}</dd>` : ''}</dl>
         </div>
         <div class="pv raw"><h4>平台保留，不公開</h4>
@@ -922,7 +939,7 @@ function stepPublish() {
     <div class="form-sec"><h3>送出之後</h3>
       <ul class="after">
         <li>團隊檢核後才會公開。地圖上的動物位置只到村里或地標。</li>
-        ${d.species === 'wild' ? '<li>這筆相遇會算進這一區的「回來」。</li>' : '<li>系統會找出「可能是同一隻」的紀錄，由照護者確認後併進牠的個體卡。</li>'}
+        ${d.species === 'wild' ? `<li>這筆相遇會算進這一區的「回來」${C.SPECIES[d.wild]?.rank ? '' : '；第一次記錄到這一種，會解鎖牠的物種卡'}。</li>` : '<li>系統會找出「可能是同一隻」的紀錄，由照護者確認後併進牠的個體卡。</li>'}
         <li class="no">不會有人因這筆紀錄到場。</li>
         <li class="no">抓捕、靠近餵食與追蹤稀有物種都不給分。</li>
       </ul>
@@ -1010,13 +1027,14 @@ function viewReceipt() {
     <h1 style="font-size:clamp(30px,5cqi,40px)">相遇已送出</h1>
     <div class="receipt">
       <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
-      <p class="step-note">${esc(t.place)}。${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
+      <p class="step-note">${esc(t.place)}。${isSensitive(t.draft) ? `敏感物種：公開時只到${esc(t.draft.pin.town)}，延後 ${C.WILD.delay} 天。` : ''}${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
     ${t.cands?.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2>
       <p class="sec-lede">${esc(C.ANIMAL.candNote)}</p>
       <ul class="a-list">${t.cands.map(id => animalMini(findAnimal(id))).join('')}</ul>
     </section>` : ''}
+    ${t.dex ? dexReceiptHTML(t) : ''}
     <section class="block"><h2 class="sec">下一步</h2>
       <div class="next two">
         <button type="button" class="btn primary" data-go="nearby">看看附近</button>
@@ -1028,17 +1046,65 @@ function viewReceipt() {
     <section class="block invite"><div><h2 class="sec">想持續留意這個地方？</h2><p class="sec-lede">用同樣的方法定期觀察，才看得出變化。</p></div><button type="button" class="btn" data-go="survey">參加持續觀察</button></section>
   </div>`;
 }
+/* ───────── 物種卡（#36） ───────── */
+const SP_KEYS = () => Object.keys(C.SPECIES).filter(k => !C.SPECIES[k].rank);
+const groupLabel = g => (C.WILD.groups.find(x => x[0] === g) || [])[1] || '';
+function dexReceiptHTML(t) {
+  const W = C.WILD, k = t.draft.wild, sp = C.SPECIES[k];
+  if (t.dex === 'group' || t.dex === 'other') return `<section class="block"><h2 class="sec">物種卡</h2>
+    <p class="sec-lede">${esc(t.dex === 'group' ? W.groupNote : W.otherNote)}</p>
+    <div class="next two"><button type="button" class="btn" data-act="dex" id="rc-dex">看物種卡</button></div></section>`;
+  return `<section class="block"><h2 class="sec" id="dexHead">${t.dex === 'new' ? '解鎖新的物種卡' : '這一種你記錄過了'}</h2>
+    <p class="sec-lede">${t.dex === 'new' ? `第一次記錄到${esc(sp.name)}。你已解鎖 ${S.dex.size} 張，共 ${SP_KEYS().length} 張。` : `每一次記錄都算進這一區的「回來」，同一次散步同一種只算一次。`}</p>
+    ${speciesCardHTML(k, t.dex === 'new')}
+    <div class="next two"><button type="button" class="btn" data-act="dex" id="rc-dex">看全部物種卡</button></div>
+  </section>`;
+}
+function speciesCardHTML(k, isNew = false) {
+  const s = C.SPECIES[k], W = C.WILD, b = C.HOME.back;
+  return `<article class="sp-card${isNew ? ' new' : ''}" aria-labelledby="spn-${k}">
+    <div class="sp-top">${spriteHTML('wild', newFeat(), k, true)}
+      <div><p class="sp-group">${esc(groupLabel(s.group))}${s.sensitive ? '<span class="badge">敏感物種</span>' : ''}<span class="sample">示例，待專家撰寫</span></p>
+      <h3 id="spn-${k}">${esc(s.name)}</h3><p>${esc(s.lead)}</p></div></div>
+    <ul class="sp-look">${s.look.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+    <div class="sp-rec"><p><b>${esc(C.HOME.area)}本季 ${b.walks} 次散步中，有 ${s.rec} 次記錄到牠</b><span class="sample">示例</span></p>
+      <p class="note">${esc(W.recNote)}</p>
+      ${s.sensitive ? `<p class="note">位置只公開到鄉鎮，並延後 ${W.delay} 天；地圖上不標點。</p>` : ''}</div>
+    <ul class="after">${s.tips.map(x => `<li>${esc(x)}</li>`).join('')}<li class="no">追蹤、靠近、引誘或餵食都不給分。</li></ul>
+    <p class="note">${esc(W.cardNote)}</p>
+  </article>`;
+}
+function viewDex() {
+  const keys = SP_KEYS(), open = S.dex.has(S.spid) ? S.spid : null;
+  return `<div class="page pad">
+    <h1 style="font-size:clamp(30px,5cqi,40px)">物種卡</h1>
+    <p class="lede">第一次記錄到一種野生動物，就會解鎖牠的卡片。卡片只寫紀錄與散步的努力量，不寫數量；敏感物種的位置只到鄉鎮。</p>
+    <p class="small">已解鎖 <b>${keys.filter(k => S.dex.has(k)).length}</b> 張，共 ${keys.length} 張<span class="sample">示例</span></p>
+    <ul class="dex">${keys.map(k => {
+      const s = C.SPECIES[k], on = S.dex.has(k);
+      return `<li>${on
+        ? `<button type="button" class="a-mini" id="dx-${k}" data-act="sp-card" data-id="${k}" aria-expanded="${open === k}">${spriteHTML('wild', newFeat(), k).replace('class="px', 'class="px sm')}<span><b>${esc(s.name)}</b><span class="a-mini-sub">${esc(groupLabel(s.group))}${s.sensitive ? '・敏感物種' : ''}</span></span></button>`
+        : `<div class="a-mini locked"><span class="px sm px-unk" role="img" aria-label="還沒解鎖">?</span><span><b>還沒記錄過</b><span class="a-mini-sub">一種${esc(groupLabel(s.group))}</span></span></div>`}</li>`;
+    }).join('')}</ul>
+    ${open ? `<section class="block" id="spOpen">${speciesCardHTML(open)}</section>` : ''}
+    <section class="block invite"><div><h2 class="sec">出門記錄一次相遇</h2><p class="sec-lede">看見或聽見都可以記；認不出種，選類群也算。</p></div><button type="button" class="btn" data-act="wild-record">記錄野生動物</button></section>
+  </div>`;
+}
 function submitRecord() {
   const d = S.draft;
   if (!d.pin || !d.species) { S.err = '還需要位置和動物種類。'; return showErr(); }
   const t = {
     id: `OB-20261107-0${512 + S.done.length + S.queue.length}`, place: `${d.pin.town} ${d.pin.vname}`, time: d.when.replace('T', ' '), late: d.late, mine: true,
     user: { summary: pubSummary(d), photo: !!d.photo, text: d.note ? `想說的話（${d.pubText ? '願意公開' : '不公開'}）：${d.note}` : '（沒有補充文字）' },
-    ai: { note: d.species === 'wild' ? '野生動物相遇；稀有物種公開時只到區域' : '找到 0 筆可能是同一隻的紀錄（示例）' },
+    ai: { note: d.species === 'wild' ? (isSensitive(d) ? `敏感物種：公開時只到鄉鎮，延後 ${C.WILD.delay} 天` : '野生動物相遇，算進「回來」') : '找到 0 筆可能是同一隻的紀錄（示例）' },
     flags: [], flagNote: '', fixed: [], human: {}, draft: copy(d),
   };
   if (d.photo?.kind === 'file') t.draft.photo = d.photo;
-  if (d.species !== 'wild') {
+  if (d.species === 'wild') {
+    const k = d.wild, rank = C.SPECIES[k].rank;
+    t.dex = rank ? rank : S.dex.has(k) ? 'seen' : 'new';
+    if (!rank) S.dex.add(k);
+  } else {
     const hits = S.animals.filter(a => sameWhy(a, d.species, d.f, d.pin.town));
     hits.forEach(a => a.cands.unshift({ id: t.id, month: d.when.slice(0, 7), town: d.pin.town, f: copy(d.f), mine: true }));
     t.cands = hits.map(a => a.id);
@@ -1523,7 +1589,7 @@ function viewIssues() {
 }
 
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();
@@ -1560,7 +1626,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1582,7 +1648,7 @@ const ACT = {
   'photo-none'() { S.draft.photo = null; $('#photoBox').innerHTML = ''; },
   sp(t) {
     const d = S.draft;
-    if (d.species !== t.dataset.v) { d.species = t.dataset.v; d.f = newFeat(); d.wild = null; d.n = 1; }
+    if (d.species !== t.dataset.v) { d.species = t.dataset.v; d.f = newFeat(); d.wild = null; d.cue = 'seen'; d.n = 1; }
     S.err = ''; renderStep();
   },
   hurt() { S.draft.hurt = true; S.err = ''; renderStep(); scrollTop($('#recPage')); },
@@ -1595,6 +1661,10 @@ const ACT = {
     } else f[k] = f[k] === v ? null : v;
     renderStep();
   },
+  cue(t) { S.draft.cue = t.dataset.v; renderStep(); },
+  dex() { S.spid = null; go('dex'); },
+  'sp-card'(t) { S.spid = S.spid === t.dataset.id ? null : t.dataset.id; rerender(); $('#spOpen')?.scrollIntoView({ block: 'nearest' }); },
+  'wild-record'() { Object.assign(S, { submitted: null, step: 0, err: '', openCard: null, seen: [], latest: '', draft: { ...newDraft(), species: 'wild' } }); go('record'); },
   wild(t) { S.draft.wild = S.draft.wild === t.dataset.v ? null : t.dataset.v; S.err = ''; renderStep(); },
   count(t) {
     const k = t.dataset.k, cur = S.draft[k], n = typeof cur === 'number' ? cur : 0;

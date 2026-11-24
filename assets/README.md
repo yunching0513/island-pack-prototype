@@ -25,7 +25,7 @@
 | 6 | 體態 | `cat-condition-pregnant-adult-stand.png` | 懷孕、三腳（`tripod`）；偏瘦、跛行與皮膚狀況只寫在文字裡 |
 | 7 | 表情 | `cat-face-normal-adult-stand.png` | 一定有；目前只有 `normal` |
 
-狗把 `cat` 換成 `dog`。野生動物是一整張圖：`wild-night-heron-0.png`（黑冠麻鷺）、`wild-red-bellied-squirrel-0.png`（赤腹松鼠）、`wild-light-vented-bulbul-0.png`（白頭翁）。
+狗把 `cat` 換成 `dog`。野生動物是一整張圖、用固定顏色：`wild-night-heron-0.png`（黑冠麻鷺）、`wild-red-bellied-squirrel-0.png`（赤腹松鼠）、`wild-light-vented-bulbul-0.png`（白頭翁）、`wild-leopard-cat-0.png`（石虎，敏感物種）、`wild-swinhoe-lizard-0.png`（斯文豪氏攀蜥）。只認出類群時用淡紫灰剪影：`wild-group-bird-0.png`（鳥類）、`wild-group-squirrel-0.png`（松鼠類）、`wild-group-frog-0.png`（蛙類）。物種名單待野保顧問確認。
 
 動物朝右，所以看得到的是牠的**右側**：靠近觀者的耳朵是右耳，後面那隻是左耳。
 
