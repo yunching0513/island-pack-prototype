@@ -68,10 +68,10 @@ const click = async sel => { const ok = await js(`(() => { const e = document.qu
 const text = sel => js(`document.querySelector(${JSON.stringify(sel)})?.innerText ?? ''`);
 const has = sel => js(`!!document.querySelector(${JSON.stringify(sel)})`);
 const overflow = () => js(`(() => { const d = document.documentElement, a = document.getElementById('app'); return Math.max(d.scrollWidth - d.clientWidth, a ? a.scrollWidth - a.clientWidth : 0); })()`);
-async function shot(name) {
+async function shot(name, full = true) {
   if (!SHOTS) return;
   mkdirSync(SHOTS, { recursive: true });
-  const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
+  const { data } = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: full });
   writeFileSync(join(SHOTS, name + '.png'), Buffer.from(data, 'base64'));
 }
 
@@ -217,9 +217,53 @@ async function wildlife() {
   await check('首頁「回來」可以進物種卡', async () => { await open('home'); await click('#home-dex'); return (await text('h1')) === '物種卡'; });
 }
 
+async function tutorial() {
+  console.log('玩法教學');
+  await size(375);
+  await open('home'); await js(`localStorage.clear()`); await open('home');
+  await check('第一次來，首頁有「怎麼玩」提示', async () => (await has('#tutHint')) && (await text('#tutHint')).includes('怎麼玩'));
+  await shot('tut-0-hint', false);
+  await check('從提示進入教學，共 6 步，第 1 步沒有「上一步」', async () => {
+    await click('#hint-go');
+    return (await text('.tut-top h1')).includes('第 1／6 步') && !(await has('#tut-prev')) && (await has('#tut-skip'));
+  });
+  await check('下一步與上一步切換步驟，標題取得焦點', async () => {
+    const a = await text('#tutHead');
+    await click('#tut-next');
+    const b = await text('#tutHead'), focused = await js(`document.activeElement?.id`);
+    await click('#tut-prev');
+    return a !== b && (await text('#tutHead')) === a && focused === 'tutHead';
+  });
+  await check('六步講到相遇、個體卡、回家旅程、野生動物、資訊分級與共同指標', async () => {
+    const seen = [];
+    for (let k = 0; k < 6; k++) { seen.push(await text('.tut-card')); if (k === 2) await shot('tut-3-journey', false); if (k < 5) await click('#tut-next'); }
+    const all = seen.join('\n'), miss = ['相遇', '個體卡', '回家旅程', '不是先到先得', '最後一代', '物種卡', '地標一帶', '其他玩家', '沒有個人排行榜'].filter(w => !all.includes(w));
+    if (miss.length) throw new Error('缺少：' + miss.join('、'));
+    return (await has('#tut-start')) && !(await has('#tut-skip'));
+  });
+  await check('最後一步按「開始玩」回首頁，重新整理後提示不再出現', async () => {
+    await click('#tut-start');
+    const atHome = (await js(`location.hash`)) === '#home';
+    await open('home');
+    return atHome && !(await has('#tutHint')) && (await has('#home-howto'));
+  });
+  await check('首頁「怎麼玩」隨時可以再看且從第 1 步開始，「跳過」回首頁', async () => {
+    await click('#home-howto'); await click('#tut-next'); await click('[data-go="home"]'); await click('#home-howto');
+    const first = (await text('.tut-top h1')).includes('第 1／6 步');
+    await click('#tut-skip');
+    return first && (await js(`location.hash`)) === '#home';
+  });
+  await check('提示按「不用了」就收起，焦點移到「怎麼玩」', async () => {
+    await js(`localStorage.clear()`); await open('home');
+    await click('#hint-hide');
+    return !(await has('#tutHint')) && (await js(`document.activeElement?.id`)) === 'home-howto';
+  });
+  await js(`localStorage.clear()`); // 後面的點擊目標、對比與版面檢查也要看得到提示
+}
+
 async function layout() {
   console.log('版面：沒有橫向捲動');
-  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal', 'dex'];
+  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal', 'dex', 'howto'];
   for (const w of [1360, 375, 320]) for (const dark of [false, true]) {
     await size(w, dark);
     const bad = [];
@@ -249,7 +293,7 @@ async function targets() {
   });
   // 改版後的畫面：所有按鈕、連結按鈕與摘要列至少 44px 高（WCAG 2.5.8 只要 24px，這裡照專案自己的 44px）
   const SMALL = `[...document.querySelectorAll('#view button, #view a.btn, #view summary')].filter(b => { const r = b.getBoundingClientRect(); return r.width && r.height < 44; }).map(b => b.id || b.textContent.trim().slice(0, 12))`;
-  for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); }], ['dex']]) {
+  for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); }], ['dex'], ['howto']]) {
     await check(`${v}：按鈕至少 44px 高`, async () => {
       if (prep) await prep(); else await open(v);
       const small = await js(SMALL); if (small.length) throw new Error(small.join('、'));
@@ -279,10 +323,11 @@ async function contrast() {
   console.log('文字對比');
   for (const dark of [false, true]) {
     await size(375, dark);
-    for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); await js(`document.getElementById('tierWhy').open = true`); }], ['dex'], ['record']]) {
+    for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); await js(`document.getElementById('tierWhy').open = true`); }], ['dex'], ['record'], ['howto']]) {
       await check(`${v} ${dark ? '深色' : '淺色'}：文字對比足夠`, async () => {
         if (prep) await prep(); else await open(v);
-        const bad = await js(CONTRAST); if (bad.length) throw new Error(bad.slice(0, 6).join('、'));
+        // 教學每一步只有幾段字，最少元素數放寬到 5
+        const bad = await js(v === 'howto' ? CONTRAST.replace('n < 20', 'n < 5') : CONTRAST); if (bad.length) throw new Error(bad.slice(0, 6).join('、'));
       });
     }
   }
@@ -295,6 +340,7 @@ try {
   await journey();
   await tiers();
   await wildlife();
+  await tutorial();
   await targets();
   await contrast();
   await layout();
