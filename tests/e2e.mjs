@@ -85,7 +85,7 @@ async function journey() {
   console.log('回家旅程（#27）');
   await size(375); await open('home');
   await check('麒麟（第 3 關）可由中途確認「準備好」', async () => {
-    await animal('a1'); await click('#ad-ready');
+    await animal('a1'); await click('#tier-squad'); await click('#ad-ready');
     return (await text('.a-journey li.cur h3')) === '回家' && await has('#ad-apply');
   });
   await check('申請要三題都回答「是」才能送出', async () => {
@@ -130,6 +130,42 @@ async function journey() {
     if (await has('#ad-apply')) return false;
     await click('[data-act="reset"]'); await sleep(100); await animal('a3');
     return await has('#ad-apply') && !(await text('.squad')).includes('中途與家 你');
+  });
+}
+
+async function tiers() {
+  console.log('資訊分級（#28）');
+  await size(375); await open('home'); await animal('a1');
+  const a1 = { range: '車站前後', health: '體重回升', care: '2 個餵食點', diary: '尾巴那個彎' };
+  await check('預設是公開：看得到地標一帶，看不到範圍、健康、餵食點與日記', async () => {
+    const t = await text('#view');
+    return t.includes('銅鑼鄉・車站一帶') && !t.includes(a1.range) && !t.includes(a1.health) && !t.includes(a1.care) && !t.includes(a1.diary) && await has('#diaryLock') && !(await has('#diaryIn'));
+  });
+  await check('切到小隊：多了大致範圍、健康與日記，餵食點仍鎖著', async () => {
+    await click('#tier-squad'); const t = await text('#view');
+    return t.includes(a1.range) && t.includes(a1.health) && t.includes(a1.diary) && !t.includes(a1.care) && await has('#diaryIn');
+  });
+  await check('切到照護：看得到餵食點，且註明原型不放座標', async () => {
+    await click('#tier-care'); const t = await text('#tierSec');
+    await shot('tier-care');
+    return t.includes(a1.care) && t.includes('不放任何真實或示例座標') && (await js(`document.getElementById('tier-care').getAttribute('aria-pressed')`)) === 'true';
+  });
+  await check('說明寫清楚四級與原因', async () => {
+    await js(`document.getElementById('tierWhy').open = true`);
+    const t = await text('#tierWhy');
+    return ['公開', '小隊', '照護', '敏感'].every(k => t.includes(k)) && t.includes('不顯示其他玩家') && t.includes('精確座標');
+  });
+  await check('重設原型後回到公開', async () => { await click('[data-act="reset"]'); await sleep(100); await animal('a1'); return await has('#diaryLock') && (await js(`document.getElementById('tier-pub').getAttribute('aria-pressed')`)) === 'true'; });
+  await check('所有畫面與每張個體卡（三種眼睛）都沒有經緯度', async () => {
+    const coord = `/[0-9]{2,3}\\.[0-9]{4,}|北緯|東經|經緯度/`;
+    const bad = [];
+    for (const v of ['home', 'record', 'survey', 'nearby', 'data', 'dex']) { await open(v); if (await js(`${coord}.test(document.getElementById('view').innerText)`)) bad.push(v); }
+    await open('home');
+    for (const id of ['a1', 'a2', 'a3', 'a4', 'a5']) for (const k of ['pub', 'squad', 'care']) {
+      await animal(id); await click(`#tier-${k}`);
+      if (await js(`${coord}.test(document.getElementById('view').innerText)`)) bad.push(`${id}/${k}`);
+    }
+    if (bad.length) throw new Error(bad.join('、'));
   });
 }
 
@@ -193,6 +229,9 @@ async function layout() {
       if (step === 'home') { for (const k of ['plan', 'net', 'vet', 'chip', 'kit']) await click(`#ac-${k}`); await click('#ad-go'); }
       const o = await overflow(); if (o > 0) bad.push(`animal:${step || 'apply'}(${o}px)`);
     }
+    await click('#tier-care'); await js(`document.getElementById('tierWhy').open = true`);
+    { const o = await overflow(); if (o > 0) bad.push(`animal:care(${o}px)`); }
+    await click('#tier-pub');
     await wildRecord('leopard-cat', 'heard'); let o = await overflow(); if (o > 0) bad.push(`wild:traits/publish(${o}px)`);
     await click('#submit'); o = await overflow(); if (o > 0) bad.push(`wild:receipt(${o}px)`);
     await click('#rc-dex'); await click('#dx-leopard-cat'); o = await overflow(); if (o > 0) bad.push(`dex:open(${o}px)`);
@@ -207,13 +246,54 @@ async function targets() {
     const small = await js(`[...document.querySelectorAll('.adopt button')].filter(b => b.getBoundingClientRect().height < 44).map(b => b.id || b.textContent.trim())`);
     if (small.length) throw new Error(small.join('、'));
   });
+  // 改版後的畫面：所有按鈕、連結按鈕與摘要列至少 44px 高（WCAG 2.5.8 只要 24px，這裡照專案自己的 44px）
+  const SMALL = `[...document.querySelectorAll('#view button, #view a.btn, #view summary')].filter(b => { const r = b.getBoundingClientRect(); return r.width && r.height < 44; }).map(b => b.id || b.textContent.trim().slice(0, 12))`;
+  for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); }], ['dex']]) {
+    await check(`${v}：按鈕至少 44px 高`, async () => {
+      if (prep) await prep(); else await open(v);
+      const small = await js(SMALL); if (small.length) throw new Error(small.join('、'));
+    });
+  }
+}
+
+// 文字對比：每個有直接文字的元素，用它的顏色對上最近一層不透明背景，一般字 4.5:1、大字 3:1
+const CONTRAST = `(() => {
+  const lum = c => { const [r, g, b] = c.map(v => { v /= 255; return v <= .03928 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); return .2126 * r + .7152 * g + .0722 * b; };
+  const rgb = s => { const m = s.match(/[0-9.]+/g); return m ? m.map(Number) : null; };
+  const bgOf = el => { for (let e = el; e; e = e.parentElement) { const c = rgb(getComputedStyle(e).backgroundColor); if (c && (c[3] ?? 1) > .9) return c; } return rgb(getComputedStyle(document.body).backgroundColor); };
+  const bad = []; let n = 0;
+  for (const el of document.querySelectorAll('#view *')) {
+    if (![...el.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) continue;
+    const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || !el.getClientRects().length) continue;
+    if (el.closest('[aria-hidden="true"], .sr-only, svg')) continue;
+    const fg = rgb(cs.color), bg = bgOf(el); if (!fg || !bg) continue; n++;
+    const a = fg[3] ?? 1, mix = fg.slice(0, 3).map((v, i) => v * a + bg[i] * (1 - a));
+    const L1 = lum(mix), L2 = lum(bg.slice(0, 3)), ratio = (Math.max(L1, L2) + .05) / (Math.min(L1, L2) + .05);
+    const px = parseFloat(cs.fontSize), big = px >= 24 || (px >= 18.66 && +cs.fontWeight >= 700);
+    if (ratio < (big ? 3 : 4.5) && !el.disabled && !el.closest('[disabled]')) bad.push(el.textContent.trim().slice(0, 10) + ' ' + ratio.toFixed(2));
+  }
+  return n < 20 ? ['只檢查到 ' + n + ' 個元素'] : [...new Set(bad)];
+})()`;
+async function contrast() {
+  console.log('文字對比');
+  for (const dark of [false, true]) {
+    await size(375, dark);
+    for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); await js(`document.getElementById('tierWhy').open = true`); }], ['dex'], ['record']]) {
+      await check(`${v} ${dark ? '深色' : '淺色'}：文字對比足夠`, async () => {
+        if (prep) await prep(); else await open(v);
+        const bad = await js(CONTRAST); if (bad.length) throw new Error(bad.slice(0, 6).join('、'));
+      });
+    }
+  }
 }
 
 try {
   await connect();
   await journey();
+  await tiers();
   await wildlife();
   await targets();
+  await contrast();
   await layout();
   await check('主控台沒有錯誤', () => { const p = problems.filter(x => !/favicon|ERR_FILE_NOT_FOUND|fonts\.g/.test(x)); if (p.length) throw new Error(p.slice(0, 3).join(' / ')); });
 } catch (e) { fail++; console.log(`✗ 測試中斷：${e.message}`); }

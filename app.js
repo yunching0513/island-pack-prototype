@@ -273,7 +273,7 @@ const S = {
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
   animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
-  dex: new Set(C.WILD.unlocked), spid: null,
+  dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub',
 };
 
 /* ───────── 共用片段 ───────── */
@@ -616,6 +616,33 @@ function adoptHTML(a) {
   return `<div class="ad-box adopt">${bar}${body}</div>`;
 }
 function adMove(msg) { rerender(); toast(msg); const h = $('#adHead'); if (h) { h.focus({ preventScroll: true }); h.scrollIntoView({ block: 'nearest' }); } }
+/* 資訊分級（#28）：公開 < 小隊 < 照護。原型用虛線按鈕切換，敏感級只用在野生動物。 */
+const TIER_RANK = { pub: 0, squad: 1, care: 2 };
+const canSee = t => TIER_RANK[S.tier] >= TIER_RANK[t];
+function tierWhyHTML() {
+  const T = C.TIERS;
+  return `<details class="tier-why" id="tierWhy"><summary>誰看得到什麼，為什麼</summary>
+    <table class="tier-tbl"><thead><tr><th scope="col">分級</th><th scope="col">誰看得到</th><th scope="col">內容</th></tr></thead><tbody>
+    ${Object.entries(T).map(([k, t]) => `<tr${k === S.tier ? ' class="cur"' : ''}><th scope="row">${esc(t.name)}</th><td>${esc(t.who)}</td><td>${esc(t.see)}</td></tr>`).join('')}
+    </tbody></table>
+    ${C.TIER.why.map(p => `<p>${esc(p)}</p>`).join('')}</details>`;
+}
+function tierHTML(a) {
+  const X = C.TIER, T = C.TIERS;
+  const row = (tier, label, body) => `<li class="tier-row${canSee(tier) ? '' : ' off'}"><p class="tier-lab"><span class="tier-tag">${esc(T[tier].name)}</span>${esc(label)}</p>
+    <p>${canSee(tier) ? body : esc(tier === 'care' ? X.lockCare : X.lockSquad)}</p></li>`;
+  return `<section class="block" id="tierSec"><h2 class="sec">牠的資訊</h2>
+    <p class="sec-lede">${esc(X.lede)}目前用「${esc(T[S.tier].name)}」的眼睛看。</p>
+    <div class="demo" role="group" aria-label="${esc(X.demo)}"><span class="note">${esc(X.demo)}</span>${['pub', 'squad', 'care'].map(k => `<button type="button" id="tier-${k}" data-act="tier" data-v="${k}" ${pressed(S.tier === k)}>${esc(T[k].name)}</button>`).join('')}</div>
+    <ul class="tiers">
+      ${row('pub', '在哪一帶', `${esc(a.town)}・${esc(a.area)}`)}
+      ${row('squad', '大致範圍', esc(a.range))}
+      ${row('squad', '健康與行為', esc(a.health))}
+      ${row('care', '精確位置與餵食點', `${esc(a.care)}<span class="note">${esc(X.careNote)}</span>`)}
+    </ul>
+    ${tierWhyHTML()}
+  </section>`;
+}
 function viewAnimal() {
   const a = findAnimal(S.aid) || S.animals[0], A = C.ANIMAL, J = C.JOURNEY, f = featOf(a.f), r = rareOf(a);
   S.aid = a.id;
@@ -665,17 +692,18 @@ function viewAnimal() {
       <p class="sec-lede">${esc(A.squadNote)}</p>
       <ul class="squad">${a.squad.map(([role, tag]) => `<li><span class="who-ic" aria-hidden="true">${esc(tag.slice(0, 2))}</span>${esc(roleTag(role, tag))}</li>`).join('')}</ul>
     </section>
+    ${tierHTML(a)}
     <section class="block"><h2 class="sec">名字</h2>${nameSec}</section>
     ${a.cands.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2><p class="sec-lede">${esc(A.candNote)}</p><ul class="cands">${cands}</ul></section>` : ''}
     <section class="block"><h2 class="sec">日記</h2>
-      <div class="form-sec">
+      ${!canSee('squad') ? `<p class="locked" id="diaryLock">${esc(C.TIER.diaryLock)}${esc(C.TIER.lockSquad)}<span class="tier-tag">小隊</span></p>` : `<div class="form-sec">
         <label class="field" for="diaryIn"><span>寫一則日記</span><textarea id="diaryIn" rows="3" data-ui="diary" aria-describedby="diaryHint">${esc(S.diaryText)}</textarea></label>
         <p class="note" id="diaryHint">${esc(A.diaryHint)}</p>
         ${hits ? `<div class="verdict risk" role="alert" id="diaryWarn"><p><b>${esc(A.diaryWarn)}</b>：「${hits.map(esc).join('」「')}」。這些資訊會讓動物被找到，送出前請再看一次。</p>
           <div class="step-act"><button type="button" class="btn" id="diary-edit" data-act="diary-edit">回去修改</button><button type="button" class="btn quiet" id="diary-force" data-act="diary-force">確定沒有透露，送出</button></div></div>`
         : '<div class="step-act"><button type="button" class="btn primary" id="diary-send" data-act="diary-send">送出日記</button></div>'}
       </div>
-      ${a.diary.length ? `<ul class="diary">${a.diary.map(([m, role, tag, text]) => `<li><p class="d-meta">${esc(roleTag(role, tag))}・${fmtMonth(m)}</p><p>${esc(text)}</p></li>`).join('')}</ul>` : '<p class="note">還沒有日記。</p>'}
+      ${a.diary.length ? `<ul class="diary">${a.diary.map(([m, role, tag, text]) => `<li><p class="d-meta">${esc(roleTag(role, tag))}・${fmtMonth(m)}</p><p>${esc(text)}</p></li>`).join('')}</ul>` : '<p class="note">還沒有日記。</p>'}`}
     </section>
   </div>`;
 }
@@ -1626,7 +1654,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub' });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1766,6 +1794,10 @@ const ACT = {
     a.diary.unshift([m, 'foster', '你', text]);
     if (d.visits === C.ADOPT.visits.length) { a.done = 6; a.log[5] = [m, 'H1']; }
     adMove(`第 ${n} 天的近況已回報${a.done === 6 ? '，旅程走完了' : ''}。`);
+  },
+  tier(t) {
+    S.tier = t.dataset.v;
+    rerender(); toast(`現在用「${C.TIERS[S.tier].name}」的眼睛看。`);
   },
   'diary-edit'() { S.diaryHits = null; rerender(); $('#diaryIn')?.focus(); },
   'diary-force'() { postDiary(); },

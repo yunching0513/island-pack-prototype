@@ -217,7 +217,7 @@ section.block>p,.sec-lede{max-width:36em;margin-top:var(--s2)}
 .metric .big small{font-size:18px;font-weight:700}
 .metric p{font-size:16px;line-height:1.7;margin-top:var(--s1);overflow-wrap:anywhere}
 .metric details{margin-top:var(--s1);font-size:14px;line-height:1.7}
-.metric summary{cursor:pointer;min-height:32px;display:inline-flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
+.metric summary{cursor:pointer;min-height:44px;display:inline-flex;align-items:center;text-decoration:underline;text-underline-offset:3px}
 .metric summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .metric details p{font-size:14px;color:var(--muted)}
 .goals{padding-top:var(--s3)}
@@ -586,6 +586,24 @@ body[data-device="phone"] .app{border-radius:30px}
 .a-journey .st{font-size:12px;line-height:1.5;font-weight:700;padding:0 8px;border:1px solid currentColor;border-radius:999px}
 .a-journey li.done .st{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 .squad{list-style:none;padding:0;margin:var(--s3) 0 0;display:flex;flex-wrap:wrap;gap:var(--s2)}
+/* 資訊分級（#28） */
+.tiers{list-style:none;padding:0;margin:var(--s3) 0 0;display:grid;gap:var(--s2)}
+.tier-row{border:1px solid var(--rule);border-radius:var(--r);padding:var(--s2) var(--s3);min-width:0}
+.tier-row.off{border-style:dashed;color:var(--muted)}
+.tier-row p{overflow-wrap:anywhere}
+.tier-row .note{display:block;margin-top:4px}
+.tier-lab{font-weight:700;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tier-tag{display:inline-block;font-size:12px;line-height:1.5;padding:0 8px;border:1px solid currentColor;border-radius:999px;font-weight:700;margin-inline:4px}
+.tier-why{margin-top:var(--s3)}
+.tier-why summary{min-height:44px;line-height:24px;padding:10px 0;cursor:pointer;font-weight:700;text-decoration:underline;text-underline-offset:4px}
+#tierSec .demo .note{flex:1 1 100%}
+.demo button[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-style:solid;font-weight:700}
+.tier-why p{margin-top:var(--s2)}
+.tier-tbl{width:100%;border-collapse:collapse;font-size:15px;line-height:1.5;margin-top:var(--s1);table-layout:fixed}
+.tier-tbl th,.tier-tbl td{text-align:left;vertical-align:top;padding:6px 8px 6px 0;border-bottom:1px solid var(--rule);overflow-wrap:anywhere}
+.tier-tbl thead th{font-size:13px;color:var(--muted)}
+.tier-tbl tbody th{width:4.5em}
+.tier-tbl tr.cur th{text-decoration:underline;text-underline-offset:4px}
 .squad li{display:inline-flex;align-items:center;gap:8px;padding:4px 14px 4px 4px;background:var(--paper2);border-radius:999px;font-size:15px;line-height:1.4}
 .who-ic{display:grid;place-items:center;width:32px;height:32px;border-radius:999px;background:var(--ink);color:var(--paper);font-size:12px;font-weight:700}
 .noms,.cands,.diary{list-style:none;padding:0;margin:var(--s3) 0 0;max-width:40em}
