@@ -8,6 +8,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { stamped, readIndex } from '../tools/stamp.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const PAGE = pathToFileURL(join(ROOT, 'index.html')).href;
@@ -288,6 +289,8 @@ async function contrast() {
 }
 
 try {
+  console.log('版本號');
+  await check('index.html 的 <script> 版本號是最新的（沒有的話執行 node tools/stamp.mjs）', () => readIndex() === stamped(readIndex()));
   await connect();
   await journey();
   await tiers();
