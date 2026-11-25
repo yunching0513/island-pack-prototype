@@ -256,12 +256,10 @@ const qualityOf = c => (c.qa >= c.qb && c.qa >= c.qc) ? 'A' : c.qb >= c.qc ? 'B'
 const areaName = (sc, key) => sc === 'town' ? key : sc === 'vill' ? `${byCode.get(key).t}${byCode.get(key).v}` : '';
 
 /* ───────── 狀態 ───────── */
+const newFeat = () => ({ coat: null, pattern: null, tail: null, age: null, sex: null, ear: null, body: [], react: null });
 const newDraft = () => ({
-  photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
-  adult: null, pup: null,
-  beh: { rest: null, eat: null, bark: null, chase: null },
-  clue: { collar: null, bowl: null, person: null, hurt: null },
-  hearsay: '', feel: [], feelText: '', pubPhoto: false, pubText: false,
+  species: null, hurt: false, photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
+  f: newFeat(), wild: null, cue: 'seen', n: 1, note: '', pubText: false,
 });
 const copy = o => JSON.parse(JSON.stringify(o));
 const newSurvey = () => ({ mode: 'point', phase: 'idle', t: 0, seen: 0, heard: 0, speed: 1, weather: '晴', period: '早上', extra: [] });
@@ -274,6 +272,8 @@ const S = {
   ad: { tab: 'queue' },
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
+  animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
+  dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub',
 };
 
 /* ───────── 共用片段 ───────── */
@@ -305,6 +305,78 @@ function scene({ masked = false } = {}) {
     <rect x="8" y="8" width="62" height="26" fill="var(--paper)" stroke="var(--figure)"/><text x="39" y="26" text-anchor="middle" font-size="15" fill="var(--figure)" font-family="var(--ui)">示例圖</text>
   </svg>`;
 }
+/* ───────── 像素形象：依特徵疊零件 ─────────
+   零件規格見 assets/README.md。身體與尾巴用四個代換色畫，這裡換成毛色；洋紅像素代表擦掉。 */
+const PX_EMPTY = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+const REPL = [0x404040, 0x808080, 0xb0b0b0, 0xe0e0e0];
+const COATS = {
+  black: [0x1f1c1e, 0x2e2a2c, 0x454042, 0x5d5759], white: [0xb9b4aa, 0xd9d4ca, 0xeeeae2, 0xfbf9f4],
+  orange: [0x9a4f1a, 0xc96f2a, 0xe0954f, 0xf2c08a], gray: [0x4e5459, 0x717980, 0x949ca3, 0xbfc5ca],
+  brown: [0x4a3324, 0x6b4a33, 0x8c6849, 0xb38f6d], yellow: [0x8c6a2e, 0xb88f45, 0xd4b06c, 0xecd7a3],
+  unk: [0x8f8a9c, 0xb3aec0, 0xcbc7d6, 0xe2dfea], /* 毛色還不知道：淡紫灰，等其他人補上 */
+};
+const TAIL0 = { cat: 'normal', dog: 'curled' };
+const known = v => v && v !== 'unk' && v !== 'none';
+function spriteFiles(sp, f) {
+  if (sp === 'wild') return [`wild-${f.wild}-0.png`];
+  const end = `${f.age === 'juvenile' ? 'juvenile' : 'adult'}-stand`, o = [`${sp}-body-${end}-0.png`];
+  if (known(f.pattern)) o.push(`${sp}-pattern-${f.pattern}-${end}.png`);
+  o.push(`${sp}-tail-${known(f.tail) ? f.tail : TAIL0[sp]}-${end}.png`);
+  if (f.ear === 'left' || f.ear === 'right') o.push(`${sp}-ear-${f.ear}-flat-${end}.png`);
+  ['pregnant', 'tripod'].forEach(c => { if (f.body.includes(c)) o.push(`${sp}-condition-${c}-${end}.png`); });
+  o.push(`${sp}-face-normal-${end}.png`);
+  return o;
+}
+const pxImgs = new Map(), pxOut = new Map(), pxSpec = new Map();
+const loadPx = f => {
+  if (!pxImgs.has(f)) pxImgs.set(f, new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error(f)); i.src = 'assets/' + f; }));
+  return pxImgs.get(f);
+};
+async function composePx(key) {
+  if (pxOut.has(key)) return pxOut.get(key);
+  const { files, coat } = pxSpec.get(key), imgs = await Promise.all(files.map(loadPx));
+  const cv = document.createElement('canvas'); cv.width = cv.height = 48;
+  const x = cv.getContext('2d', { willReadFrequently: true }), out = x.createImageData(48, 48), o = out.data, pal = COATS[coat] || COATS.unk;
+  for (const im of imgs) {
+    x.clearRect(0, 0, 48, 48); x.drawImage(im, 0, 0);
+    const d = x.getImageData(0, 0, 48, 48).data;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 128) continue;
+      let c = d[i] << 16 | d[i + 1] << 8 | d[i + 2];
+      if (c === 0xff00ff) { o[i + 3] = 0; continue; }
+      const r = REPL.indexOf(c); if (r >= 0) c = pal[r];
+      o[i] = c >> 16; o[i + 1] = c >> 8 & 255; o[i + 2] = c & 255; o[i + 3] = 255;
+    }
+  }
+  x.putImageData(out, 0, 0);
+  const url = cv.toDataURL(); pxOut.set(key, url);
+  return url;
+}
+const encLabel = (list, v) => (list.find(([k]) => k === v) || [])[1] || '';
+function describe(sp, f, w) {
+  const E = C.ENC;
+  if (sp === 'wild') return w && w !== 'other' ? C.SPECIES[w].name : '野生動物（種類待確認）';
+  const head = `${known(f.coat) ? encLabel(E.coat[sp], f.coat) + '色' : ''}${known(f.pattern) ? encLabel(E.pattern[sp], f.pattern) : ''}${known(f.age) ? encLabel(E.age, f.age) : ''}${encLabel(E.species, sp)}`;
+  const more = [known(f.sex) && encLabel(E.sex, f.sex), known(f.tail) && encLabel(E.tail[sp], f.tail), known(f.ear) && encLabel(E.ear, f.ear),
+    ...f.body.filter(known).map(b => encLabel(E.body, b)), known(f.react) && encLabel(E.react, f.react)].filter(Boolean);
+  return [head, ...more].join('，');
+}
+function spriteHTML(sp, f, w, big = false) {
+  const alt = `像素形象：${describe(sp, f, w)}（暫代圖）`;
+  if (sp === 'wild' && (!w || w === 'other')) return `<span class="px px-unk${big ? ' big' : ''}" role="img" aria-label="${esc(alt)}">?</span>`;
+  const files = spriteFiles(sp, { ...f, wild: w }), coat = sp === 'wild' ? null : known(f.coat) ? f.coat : 'unk';
+  const key = files.join('|') + '|' + coat;
+  pxSpec.set(key, { files, coat });
+  return `<img class="px${big ? ' big' : ''}" src="${pxOut.get(key) || PX_EMPTY}" data-px="${esc(key)}" width="48" height="48" alt="${esc(alt)}">`;
+}
+function paintPx() {
+  $$('img[data-px]').forEach(img => {
+    const u = pxOut.get(img.dataset.px);
+    if (u) { if (img.getAttribute('src') !== u) img.src = u; return; }
+    composePx(img.dataset.px).then(v => { img.src = v; }).catch(() => img.classList.add('px-miss'));
+  });
+}
+new MutationObserver(paintPx).observe(document.body, { childList: true, subtree: true });
 function toast(msg) {
   const t = $('#toast');
   t.textContent = msg; t.hidden = false;
@@ -329,7 +401,7 @@ function renderNav() {
 }
 const TIMING = {
   live: '即時：文件的原始構想。卡片隨填寫內容浮現。',
-  tier: '分級：安全提示即時出現，其他卡片等「今天看見」填完。',
+  tier: '分級：安全提示即時出現，其他卡片等「牠的特徵」填完。',
   after: '填完才看：所有卡片都等觀察確認之後。',
 };
 function renderRail() {
@@ -399,6 +471,7 @@ function viewHome() {
           <p class="big">${one(st.backRate)}<small> 種／小時</small></p>
           <p>本季散步 ${b.walks} 次、共 ${b.hours} 小時，上季每小時 ${one(b.rateLast)} 種。常見的有${b.common.map(esc).join('、')}。</p>
           <details><summary>怎麼算</summary><p>${esc(H.howBack)}</p></details>
+          <button type="button" class="btn sm" id="home-dex" data-act="dex">物種卡：已解鎖 ${SP_KEYS().filter(k => S.dex.has(k)).length} 張</button>
         </div>
         <div class="goals">
           <h3>本季勝利條件</h3>
@@ -421,6 +494,11 @@ function viewHome() {
         <h3>最後一代</h3>
         <p>不適合家庭生活的個體，絕育後由照護者守護到終老，不再有下一代。絕育是止血，不是結局；牠變得親人時，可以回到「準備好」。目前 ${h.last} 隻。</p>
       </div>
+    </section>
+    <section class="block">
+      <h2 class="sec">附近的牠們</h2>
+      <p class="sec-lede">每一隻都有自己的個體卡：走到第幾關、由誰確認、一起參與的小隊，還有鄰里取的名字和日記。<span class="sample">示例</span></p>
+      <ul class="a-list">${S.animals.map(animalMini).join('')}</ul>
     </section>
     <section class="block">
       <h2 class="sec">看見受傷或受困的動物</h2>
@@ -449,21 +527,201 @@ function storyHTML(s) {
   </article>`;
 }
 
+/* ───────── 個體卡（#26） ─────────
+   多筆相遇併成同一隻動物的卡片。位置只到地標一帶；併卡、定名由照護者確認，原型裡用虛線按鈕示範。 */
+const kn = v => v != null && v !== 'unk';
+const featOf = f => ({ ...newFeat(), ...f });
+const findAnimal = id => S.animals.find(a => a.id === id);
+const reachedText = a => a.branch === 'last' ? '最後一代，由照護者守護' : a.done ? `第 ${a.done} 關：${C.JOURNEY[a.done - 1].step}` : '還沒開始';
+const roleTag = (role, tag) => `${C.ROLES[role]} ${tag}`;
+function rareOf(a) {
+  const o = [];
+  if (a.seen < 3) o.push('seldom');
+  if (a.f.age === 'senior') o.push('senior');
+  if (a.f.coat === 'black') o.push('black');
+  if (a.f.react === 'hide') o.push('shy');
+  return o;
+}
+/* 「可能是同一隻」：同物種、同鄉鎮，兩邊都填了的特徵不能矛盾，而且至少兩項相同 */
+const MATCH = [['coat', '毛色'], ['pattern', '花紋'], ['tail', '尾巴'], ['ear', '剪耳'], ['sex', '性別']];
+function sameWhy(a, sp, f, town) {
+  if (a.sp !== sp || a.town !== town) return null;
+  if (f.age === 'juvenile' && a.f.age === 'senior') return null;
+  const why = [];
+  for (const [k, l] of MATCH) {
+    const x = f[k], y = a.f[k];
+    if (!kn(x) || !kn(y)) continue;
+    if (x !== y) return null;
+    why.push(`${l}相同`);
+  }
+  return why.length >= 2 ? [...why, `都在${town}`] : null;
+}
+function animalMini(a) {
+  return `<li><button type="button" class="a-mini" id="am-${a.id}" data-act="animal" data-id="${a.id}">
+    ${spriteHTML(a.sp, featOf(a.f), null).replace('class="px', 'class="px sm')}
+    <span><b>${esc(a.name || '還沒有名字')}</b><span class="a-mini-sub">${esc(reachedText(a))}</span><span class="a-mini-sub">${esc(a.town)}・${esc(a.area)}</span>${rareOf(a).length ? '<span class="badge">進度加倍</span>' : ''}</span>
+  </button></li>`;
+}
+function riskyHits(s) {
+  const words = C.ANIMAL.risky.filter(w => s.includes(w));
+  const nums = s.match(/[0-9０-９]+\s*(點|時|號|樓|巷|弄)|[一二三四五六七八九十兩]+(點[半多鐘左前後]|時|號|樓|巷|弄)/g) || [];
+  return [...new Set([...words, ...nums])];
+}
+/* 回家旅程的後半（#27）：準備好 → 申請 → 確認 → 行前清單 → 回家 → 回訪。
+   狀態放在動物物件的 ad 上，重設原型時跟著 ANIMALS 一起還原。確認一律由照護者或中途，原型用虛線按鈕示範。 */
+const adOf = a => a.ad || (a.ad = { stage: 'apply', ans: {}, why: '', checks: [], visits: 0 });
+const HOUSE = '<svg viewBox="0 0 16 16" width="40" height="40" aria-hidden="true" shape-rendering="crispEdges"><path fill="currentColor" d="M7 1h2v1h1v1h1v1h1v1h1v1h1v2h-1v7H9v-4H7v4H3V8H2V6h1V5h1V4h1V3h1V2h1z"/></svg>';
+function badgeHTML(a) {
+  const X = C.ADOPT;
+  return `<div class="home-badge"><span class="hb-ic">${HOUSE}</span><div>
+    <h3>「${esc(X.badge)}」徽章</h3>
+    <p><b>小隊 ${a.squad.length} 人共享。</b>${esc(X.badgeLede)}</p>
+    <p class="note">${a.squad.map(([r, t]) => esc(roleTag(r, t))).join('、')}</p></div></div>`;
+}
+function adoptHTML(a) {
+  const X = C.ADOPT;
+  if (a.branch === 'last') return `<div class="branch ad-box"><h3 id="adHead" tabindex="-1">變得親人了嗎？</h3><p>${esc(X.backLede)}</p>
+    <div class="demo"><button type="button" id="ad-back" data-act="ad-back">${esc(X.backDemo)}</button></div></div>`;
+  if (a.done < 3) return '';
+  if (a.done === 3) return `<div class="branch ad-box"><h3 id="adHead" tabindex="-1">下一關：準備好</h3><p>${esc(X.readyLede)}</p>
+    <div class="demo"><button type="button" id="ad-ready" data-act="ad-ready">${esc(X.readyDemo)}</button><button type="button" id="ad-last" data-act="ad-last">${esc(X.lastDemo)}</button></div></div>`;
+  if (a.done >= 6 && !a.ad) return `${badgeHTML(a)}<div class="branch ad-box"><h3>旅程完成</h3><p>${esc(X.doneLede)}</p></div>`;
+  const d = adOf(a);
+  const at = a.done >= 6 ? 4 : a.done >= 5 ? 3 : d.stage === 'prep' ? 2 : d.stage === 'wait' ? 1 : 0;
+  const bar = `<ol class="ad-steps" aria-label="回家的四段">${X.steps.map((s, i) => `<li class="${i < at ? 'done' : i === at ? 'cur' : ''}"${i === at ? ' aria-current="step"' : ''}><span>${i + 1}</span>${esc(s)}</li>`).join('')}</ol>`;
+  let body = '';
+  if (a.done === 4 && d.stage === 'apply') {
+    const ok = X.applyQs.every(([k]) => d.ans[k] === 'yes');
+    body = `<h3 id="adHead" tabindex="-1">申請陪${esc(a.name || '牠')}回家</h3>
+      <p class="note">${esc(X.notFirst)}</p>
+      ${X.applyQs.map(([k, q]) => `<div class="pick"><span class="lab">${esc(q)}</span><span class="chips" role="group" aria-label="${esc(q)}">${[['yes', '是'], ['no', '還沒']].map(([v, l]) => `<button type="button" class="chip" id="aq-${k}-${v}" data-act="ad-q" data-k="${k}" data-v="${v}" ${pressed(d.ans[k] === v)}>${l}</button>`).join('')}</span></div>`).join('')}
+      <label class="field" for="adWhy"><span>${esc(X.whyLabel)}</span><textarea id="adWhy" rows="3" data-ui="adwhy" aria-describedby="adWhyHint">${esc(d.why)}</textarea></label>
+      <p class="note" id="adWhyHint">${esc(X.whyHint)}</p>
+      <p class="err" id="adErr" role="alert">${S.adErr && !ok ? esc(X.applyErr) : ''}</p>
+      <div class="step-act"><button type="button" class="btn primary" id="ad-apply" data-act="ad-apply">送出申請</button></div>`;
+  } else if (a.done === 4 && d.stage === 'wait') {
+    body = `<h3 id="adHead" tabindex="-1">等待照護者與中途確認</h3><p>${esc(X.waitLede)}</p>
+      <div class="demo"><button type="button" id="ad-confirm" data-act="ad-confirm">${esc(X.confirmDemo)}</button></div>`;
+  } else if (a.done === 4) {
+    const all = X.checklist.every(([k]) => d.checks.includes(k));
+    body = `<h3 id="adHead" tabindex="-1">行前清單</h3><p>${esc(X.prepLede)}</p>
+      <ul class="ad-check">${X.checklist.map(([k, t, s]) => `<li><button type="button" id="ac-${k}" data-act="ad-check" data-k="${k}" role="checkbox" aria-checked="${d.checks.includes(k)}"><span class="box" aria-hidden="true"></span><span><b>${esc(t)}</b><span class="note">${esc(s)}</span></span></button></li>`).join('')}</ul>
+      <div class="step-act"><button type="button" class="btn primary" id="ad-go" data-act="ad-go" ${all ? '' : 'disabled'}>${esc(X.goBtn)}</button><span class="note">已完成 ${d.checks.length}／${X.checklist.length} 項</span></div>`;
+  } else {
+    const next = X.visits[d.visits];
+    body = `${badgeHTML(a)}<h3 id="adHead" tabindex="-1">回訪</h3><p>${esc(next ? X.visitLede : X.doneLede)}</p>
+      <ul class="ad-visits">${X.visits.map(([n], i) => `<li class="${i < d.visits ? 'done' : ''}"><b>第 ${n} 天</b>${i < d.visits ? '已回報' : '還沒到'}</li>`).join('')}</ul>
+      ${next ? `<div class="demo"><button type="button" id="ad-visit" data-act="ad-visit">${esc(X.visitDemo(next[0]))}</button></div>` : ''}`;
+  }
+  return `<div class="ad-box adopt">${bar}${body}</div>`;
+}
+function adMove(msg) { rerender(); toast(msg); const h = $('#adHead'); if (h) { h.focus({ preventScroll: true }); h.scrollIntoView({ block: 'nearest' }); } }
+/* 資訊分級（#28）：公開 < 小隊 < 照護。原型用虛線按鈕切換，敏感級只用在野生動物。 */
+const TIER_RANK = { pub: 0, squad: 1, care: 2 };
+const canSee = t => TIER_RANK[S.tier] >= TIER_RANK[t];
+function tierWhyHTML() {
+  const T = C.TIERS;
+  return `<details class="tier-why" id="tierWhy"><summary>誰看得到什麼，為什麼</summary>
+    <table class="tier-tbl"><thead><tr><th scope="col">分級</th><th scope="col">誰看得到</th><th scope="col">內容</th></tr></thead><tbody>
+    ${Object.entries(T).map(([k, t]) => `<tr${k === S.tier ? ' class="cur"' : ''}><th scope="row">${esc(t.name)}</th><td>${esc(t.who)}</td><td>${esc(t.see)}</td></tr>`).join('')}
+    </tbody></table>
+    ${C.TIER.why.map(p => `<p>${esc(p)}</p>`).join('')}</details>`;
+}
+function tierHTML(a) {
+  const X = C.TIER, T = C.TIERS;
+  const row = (tier, label, body) => `<li class="tier-row${canSee(tier) ? '' : ' off'}"><p class="tier-lab"><span class="tier-tag">${esc(T[tier].name)}</span>${esc(label)}</p>
+    <p>${canSee(tier) ? body : esc(tier === 'care' ? X.lockCare : X.lockSquad)}</p></li>`;
+  return `<section class="block" id="tierSec"><h2 class="sec">牠的資訊</h2>
+    <p class="sec-lede">${esc(X.lede)}目前用「${esc(T[S.tier].name)}」的眼睛看。</p>
+    <div class="demo" role="group" aria-label="${esc(X.demo)}"><span class="note">${esc(X.demo)}</span>${['pub', 'squad', 'care'].map(k => `<button type="button" id="tier-${k}" data-act="tier" data-v="${k}" ${pressed(S.tier === k)}>${esc(T[k].name)}</button>`).join('')}</div>
+    <ul class="tiers">
+      ${row('pub', '在哪一帶', `${esc(a.town)}・${esc(a.area)}`)}
+      ${row('squad', '大致範圍', esc(a.range))}
+      ${row('squad', '健康與行為', esc(a.health))}
+      ${row('care', '精確位置與餵食點', `${esc(a.care)}<span class="note">${esc(X.careNote)}</span>`)}
+    </ul>
+    ${tierWhyHTML()}
+  </section>`;
+}
+function viewAnimal() {
+  const a = findAnimal(S.aid) || S.animals[0], A = C.ANIMAL, J = C.JOURNEY, f = featOf(a.f), r = rareOf(a);
+  S.aid = a.id;
+  const stages = J.map((j, i) => {
+    const st = i < a.done ? 'done' : a.branch === 'last' && i >= 3 ? 'paused' : i === a.done ? 'cur' : 'todo';
+    const lg = a.log[i];
+    const line = st === 'done' ? `${esc(j.who)} ${esc(lg[1])} 確認，${fmtMonth(lg[0])}` : st === 'cur' ? `等待${esc(j.who)}確認` : st === 'paused' ? '暫停：牠目前是最後一代' : `由${esc(j.who)}確認`;
+    return `<li class="${st}"${st === 'cur' ? ' aria-current="step"' : ''}>
+      <p class="j-no">第 ${i + 1} 關<span class="st">${{ done: '完成', cur: '進行中', paused: '暫停', todo: '還沒到' }[st]}</span></p>
+      <h3>${esc(j.step)}</h3><p>${line}</p></li>`;
+  }).join('');
+  const top = [...a.noms].sort((p, q) => q[1] - p[1])[0];
+  const nameSec = a.name
+    ? `<p>由鄰里提名、${top ? top[1] : 0} 票選出，照護者確認後寫上卡片。</p>`
+    : `<p class="note">${esc(A.nameNote)}</p>
+      ${a.noms.length ? `<ul class="noms">${a.noms.map(([n, v], i) => {
+        const did = S.voted.includes(a.id + n);
+        return `<li><span><b>${esc(n)}</b>　${v} 票</span><button type="button" class="btn sm" id="nv-${i}" data-act="nom-vote" data-i="${i}" ${did ? 'disabled' : ''}>${did ? '已投' : '投這個名字'}</button></li>`;
+      }).join('')}</ul>` : '<p>還沒有人提名。</p>'}
+      <div class="nom-add"><label class="field" for="nomIn"><span>提名一個名字</span><input type="text" id="nomIn" maxlength="8" data-ui="nom" value="${esc(S.nomText)}"></label><button type="button" class="btn" id="nom-add" data-act="nom-add">提名</button></div>
+      ${a.noms.length ? '<div class="demo"><button type="button" id="nom-fix" data-act="nom-fix">原型示範：照護者以最多票的名字定名</button></div>' : ''}`;
+  const cands = a.cands.map((c, i) => {
+    const why = sameWhy(a, a.sp, c.f, c.town) || ['特徵相近'];
+    return `<li>${spriteHTML(a.sp, featOf(c.f), null).replace('class="px', 'class="px sm')}
+      <div><p><b>${c.mine ? '你剛送出的相遇' : '一筆相遇'}</b>　<span class="mono">${esc(c.id)}</span></p>
+      <p class="note">${fmtMonth(c.month)}・${esc(c.town)}・${esc(why.join('、'))}</p>
+      <div class="demo"><button type="button" id="cy-${i}" data-act="cand-yes" data-i="${i}">原型示範：照護者確認是同一隻</button><button type="button" id="cn-${i}" data-act="cand-no" data-i="${i}">不是同一隻</button></div></div></li>`;
+  }).join('');
+  const hits = S.diaryHits;
+  return `<div class="page pad" id="animalPage">
+    <p><button type="button" class="btn quiet sm" data-go="home">回首頁</button></p>
+    <div class="avatar a-head">${spriteHTML(a.sp, f, null, true)}<div>
+      <h1 class="a-name">${esc(a.name || '還沒有名字')} <span class="sample">示例</span></h1>
+      <p><b>${esc(describe(a.sp, f, null))}</b></p>
+      <p class="note">${esc(a.town)}・${esc(a.area)}。被看見 ${a.seen} 次，最近一次在${fmtMonth(a.last)}。</p>
+      ${r.length ? `<p class="badges">${r.map(k => `<span class="badge">${esc(C.RARE[k])}</span>`).join('')}</p>` : ''}
+    </div></div>
+    ${r.length ? `<p class="double"><b>冷門個體，進度加倍。</b>${esc(A.rareNote)}</p>` : ''}
+    <p class="note" style="margin-top:8px">${esc(A.sampleNote)}</p>
+    <section class="block"><h2 class="sec">回家旅程</h2>
+      <p class="sec-lede">${esc(reachedText(a))}。每一關由不同的角色確認。</p>
+      <ol class="journey a-journey">${stages}</ol>
+      ${a.branch === 'last' ? `<div class="branch"><h3>最後一代</h3><p>${esc(A.lastNote)}</p></div>` : ''}
+      ${adoptHTML(a)}
+    </section>
+    <section class="block"><h2 class="sec">小隊 ${a.squad.length} 人</h2>
+      <p class="sec-lede">${esc(A.squadNote)}</p>
+      <ul class="squad">${a.squad.map(([role, tag]) => `<li><span class="who-ic" aria-hidden="true">${esc(tag.slice(0, 2))}</span>${esc(roleTag(role, tag))}</li>`).join('')}</ul>
+    </section>
+    ${tierHTML(a)}
+    <section class="block"><h2 class="sec">名字</h2>${nameSec}</section>
+    ${a.cands.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2><p class="sec-lede">${esc(A.candNote)}</p><ul class="cands">${cands}</ul></section>` : ''}
+    <section class="block"><h2 class="sec">日記</h2>
+      ${!canSee('squad') ? `<p class="locked" id="diaryLock">${esc(C.TIER.diaryLock)}${esc(C.TIER.lockSquad)}<span class="tier-tag">小隊</span></p>` : `<div class="form-sec">
+        <label class="field" for="diaryIn"><span>寫一則日記</span><textarea id="diaryIn" rows="3" data-ui="diary" aria-describedby="diaryHint">${esc(S.diaryText)}</textarea></label>
+        <p class="note" id="diaryHint">${esc(A.diaryHint)}</p>
+        ${hits ? `<div class="verdict risk" role="alert" id="diaryWarn"><p><b>${esc(A.diaryWarn)}</b>：「${hits.map(esc).join('」「')}」。這些資訊會讓動物被找到，送出前請再看一次。</p>
+          <div class="step-act"><button type="button" class="btn" id="diary-edit" data-act="diary-edit">回去修改</button><button type="button" class="btn quiet" id="diary-force" data-act="diary-force">確定沒有透露，送出</button></div></div>`
+        : '<div class="step-act"><button type="button" class="btn primary" id="diary-send" data-act="diary-send">送出日記</button></div>'}
+      </div>
+      ${a.diary.length ? `<ul class="diary">${a.diary.map(([m, role, tag, text]) => `<li><p class="d-meta">${esc(roleTag(role, tag))}・${fmtMonth(m)}</p><p>${esc(text)}</p></li>`).join('')}</ul>` : '<p class="note">還沒有日記。</p>'}`}
+    </section>
+  </div>`;
+}
+function postDiary() {
+  const a = findAnimal(S.aid);
+  a.diary.unshift(['2026-11', 'story', '你', S.diaryText.trim()]);
+  if (!a.squad.some(([, t]) => t === '你')) a.squad.push(['story', '你']);
+  S.diaryText = ''; S.diaryHits = null;
+  rerender(); toast('日記已送出。');
+}
+
 /* ───────── 記錄一次相遇 ───────── */
-const STEPS = ['現場', '今天看見', '補充', '公開與送出'];
-const BEH = [['rest', '休息或走動'], ['eat', '進食'], ['bark', '吠叫'], ['chase', '追逐人或車']];
-const CLUE = [['collar', '項圈或牽繩'], ['bowl', '飼料碗或餵食痕跡'], ['person', '有人在場照顧'], ['hurt', '看起來受傷或受困']];
-const FEEL = [['road', '擔心犬隻跑上馬路'], ['self', '擔心自己或家人'], ['care', '想知道有沒有人在照顧'], ['help', '想知道是否已有團體協助'], ['join', '想一起幫忙']];
-const TAGS = { puppy: '你填了幼犬', bowl: '你看見飼料碗', chase: '你看見追逐', hurt: '你看見受傷或受困', wantHelp: '你想知道是否有人協助' };
-const hasCount = d => d.adult !== null || d.pup !== null;
+const STEPS = ['現場', '牠的特徵', '送出'];
+const TAGS = { puppy: '你看見幼犬' };
 
 function draftTags() {
   const d = S.draft, t = new Set();
-  if (typeof d.pup === 'number' && d.pup > 0) t.add('puppy');
-  if (d.clue.bowl === 'yes') t.add('bowl');
-  if (d.beh.chase === 'yes') t.add('chase');
-  if (d.clue.hurt === 'yes') t.add('hurt');
-  if (d.feel.includes('help')) t.add('wantHelp');
+  if (d.species === 'dog' && d.f.age === 'juvenile') t.add('puppy');
   return t;
 }
 function matchCards() {
@@ -534,7 +792,7 @@ function viewRecord() {
   if (S.submitted) return viewReceipt();
   return `<div class="page pad" id="recPage">
     <h1 style="font-size:clamp(30px,5cqi,40px)">記錄一次相遇</h1>
-    <p class="small">這是一筆觀察紀錄，不會派人到場。有人身危險請撥 110 或 119。</p>
+    <p class="small">貓、狗和野生動物都從這裡記。這是一筆相遇紀錄，不會派人到場；看見受傷或受困的動物，請先聯絡緊急窗口。</p>
     <ol class="steps" id="stepBar"></ol>
     <div class="rec-grid">
       <div class="rec-form" id="stepBody"></div>
@@ -550,8 +808,12 @@ const demoBtn = n => `<div class="demo"><button type="button" id="fill-${n}" dat
 function stepScene() {
   const d = S.draft;
   return `<h2>現場</h2>
-    <p class="safe">請站在安全距離，不要為了拍照靠近犬隻。</p>
+    <p class="safe">請站在安全距離，不要為了拍照靠近或餵食動物。</p>
     ${demoBtn(0)}
+    <div class="form-sec"><h3>遇見的是</h3>
+      <div class="chips" role="group" aria-label="遇見的是">${C.ENC.species.map(([k, l]) => `<button type="button" class="chip" id="sp-${k}" data-act="sp" data-v="${k}" ${pressed(d.species === k)}>${l}</button>`).join('')}</div>
+      <button type="button" class="chip" id="hurt-0" data-act="hurt">牠看起來受傷或受困</button>
+    </div>
     <div class="form-sec"><h3>位置</h3>
       <p class="step-note">實際版本會先用手機定位。原型請點地圖，或從下面的清單選擇。</p>
       <div class="map map-rec" id="recMap"></div>
@@ -573,7 +835,7 @@ function stepScene() {
         <button type="button" class="btn quiet sm" id="photoNone" data-act="photo-none">不放照片</button>
       </div>
       <div id="photoBox">${photoHTML()}</div>
-      <p class="note">照片只留在這個分頁，不會上傳。</p>
+      <p class="note">${esc(C.ENC.photoNote)}原型的照片只留在這個分頁，不會上傳。</p>
     </div>
     <div class="form-sec"><h3>時間</h3>
       <label class="field" for="obsWhen"><span>觀察時間</span><input type="datetime-local" id="obsWhen" data-bind="when" value="${d.when}"></label>
@@ -581,7 +843,7 @@ function stepScene() {
       <p class="note">觀察時間和上傳時間分開保存，避免把補登當成即時目擊。</p>
     </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
-    <div class="step-act"><button type="button" class="btn primary" id="next-0" data-act="step" data-n="1">下一步：今天看見</button></div>`;
+    <div class="step-act"><button type="button" class="btn primary" id="next-0" data-act="step" data-n="1">下一步：${d.species === 'wild' ? '是哪一種' : '牠的特徵'}</button></div>`;
 }
 const HINT = {
   start: '先點你所在的大概位置，地圖會放大；再點一下放下位置。',
@@ -600,120 +862,128 @@ const photoHTML = () => {
   if (!p) return '';
   return `<div class="photo-box">${p.kind === 'sample' ? scene() : `<img src="${p.url}" alt="你選的照片">`}</div>`;
 };
-function counterHTML(k, label, icon) {
-  const v = S.draft[k];
-  return `<div class="counter">
-    <span class="who"><svg aria-hidden="true"><use href="#${icon}"/></svg>${label}</span>
-    <span class="ctl">
-      <button type="button" id="dec-${k}" data-act="count" data-k="${k}" data-d="-1" aria-label="${label}減一">−</button>
-      <span class="val" aria-live="polite">${v === null ? '—' : v === 'unk' ? '?' : v}</span>
-      <button type="button" id="inc-${k}" data-act="count" data-k="${k}" data-d="1" aria-label="${label}加一">＋</button>
-      <button type="button" class="unk" id="unk-${k}" data-act="count-unk" data-k="${k}" ${pressed(v === 'unk')}>不知道</button>
-    </span>
-  </div>`;
+function pickHTML(k, list, label, { multi = false, unk = true } = {}) {
+  const f = S.draft.f, on = v => multi ? f[k].includes(v) : f[k] === v;
+  const all = unk ? [...list, ['unk', '不知道']] : list;
+  return `<div class="pick"><span class="lab">${label}</span><span class="chips" role="group" aria-label="${label}">${all.map(([v, l]) => `<button type="button" class="chip${v === 'unk' ? ' unk' : ''}" id="ft-${k}-${v}" data-act="ft" data-k="${k}" data-v="${v}" ${pressed(on(v))}>${l}</button>`).join('')}</span></div>`;
 }
-function triHTML(g, k, label) {
-  const v = S.draft[g][k], b = (val, t) => `<button type="button" id="tri-${k}-${val}" data-act="tri" data-g="${g}" data-k="${k}" data-v="${val}" ${pressed(v === val)}>${t}</button>`;
-  return `<div class="tri"><span class="lab">${label}</span><span class="seg" role="group" aria-label="${label}">${b('yes', '有')}${b('no', '未見')}${b('unk', '不知道')}</span></div>`;
+function avatarHTML() {
+  const d = S.draft;
+  return `<div class="avatar">${spriteHTML(d.species, d.f, d.wild, true)}<div><p><b>${esc(describe(d.species, d.f, d.wild))}</b></p>
+    <p class="note">形象由你填的特徵疊出來，同樣的特徵每次都畫出同一張圖；其他人補上特徵時，形象也會跟著變。目前是暫代圖。</p></div></div>`;
 }
-function stepSeen() {
-  return `<h2>今天看見</h2>
-    <p class="step-note"><span class="tag-seen">親眼看見</span> 這一頁只填你現在看到的事。聽來的事放到下一步。</p>
-    ${demoBtn(1)}
-    <div class="form-sec"><h3>同時看見幾隻</h3>
-      <div class="counters">${counterHTML('adult', '成犬', 'i-dog')}${counterHTML('pup', '幼犬', 'i-pup')}</div>
+const wildChip = k => {
+  const s = C.SPECIES[k], d = S.draft;
+  return `<button type="button" class="chip${s.rank ? ' unk' : ''}" id="wd-${k}" data-act="wild" data-v="${k}" ${pressed(d.wild === k)}>${esc(s.name.replace('（還沒認出種）', '，認不出種'))}${s.sensitive ? '<span class="chip-tag">敏感</span>' : ''}</button>`;
+};
+function stepTraits() {
+  const d = S.draft, E = C.ENC, W = C.WILD, sp = d.species;
+  if (sp === 'wild') return `<h2>是哪一種</h2>
+    <p class="step-note">只記你看見的。不要靠近、追蹤或引誘牠；稀有物種的位置只會公開到區域。</p>
+    ${avatarHTML()}
+    <div class="form-sec"><h3>看見還是聽見</h3>
+      <div class="seg" role="group" aria-label="看見還是聽見">${W.cues.map(([k, l]) => `<button type="button" id="cue-${k}" data-act="cue" data-v="${k}" ${pressed(d.cue === k)}>${l}</button>`).join('')}</div>
     </div>
-    <div class="form-sec"><h3>正在發生什麼<small>可略過</small></h3>${BEH.map(([k, l]) => triHTML('beh', k, l)).join('')}</div>
-    <div class="form-sec"><h3>現場線索<small>可略過</small></h3>${CLUE.map(([k, l]) => triHTML('clue', k, l)).join('')}</div>
+    <div class="form-sec"><h3>種類</h3>
+      <p class="note">${esc(W.pickNote)}</p>
+      ${W.groups.map(([g, gl, keys]) => `<div class="pick"><span class="lab">${gl}</span><span class="chips" role="group" aria-label="${gl}">${keys.map(k => wildChip(k)).join('')}</span></div>`).join('')}
+      <div class="pick"><span class="lab">都不是</span><span class="chips">${wildChip('other')}</span></div>
+      ${d.wild && C.SPECIES[d.wild].sensitive ? `<p class="safe">${esc(C.SPECIES[d.wild].name)}是敏感物種：公開時只到鄉鎮，並延後 ${W.delay} 天顯示。請不要追蹤或靠近。</p>` : ''}
+    </div>
+    <div class="form-sec"><h3>同時${cueLabel(d)}幾隻</h3>
+      ${d.cue === 'heard' ? '<p class="note">聽見的不確定有幾隻，就填 1。</p>' : ''}
+      <div class="counter"><span class="who">隻數</span><span class="ctl">
+        <button type="button" id="dec-n" data-act="count" data-k="n" data-d="-1" aria-label="隻數減一">−</button>
+        <span class="val" aria-live="polite">${d.n}</span>
+        <button type="button" id="inc-n" data-act="count" data-k="n" data-d="1" aria-label="隻數加一">＋</button>
+      </span></div>
+    </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
       <button type="button" class="btn quiet" id="back-1" data-act="step" data-n="0">上一步</button>
-      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：補充</button>
-      <button type="button" class="btn sm" id="skip-1" data-act="step" data-n="3">略過補充，直接送出</button>
+      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：送出</button>
     </div>`;
-}
-function stepExtra() {
-  const d = S.draft;
-  return `<h2>補充</h2>
-    <p class="step-note">這一頁可以略過。寫在這裡的內容會保留情境，但不會算成今天的目擊。</p>
-    ${demoBtn(2)}
-    <div class="form-sec"><h3><span class="tag-heard">他人轉述</span></h3>
-      <label class="field" for="hearsay"><span>別人告訴你、但你沒有親眼看見的事</span>
-      <textarea id="hearsay" rows="3" data-bind="hearsay" placeholder="例如：鄰居說上個月有狗追機車">${esc(d.hearsay)}</textarea></label>
-    </div>
-    <div class="form-sec"><h3><span class="tag-felt">我的想法</span></h3>
-      <div class="chips">${FEEL.map(([k, l]) => `<button type="button" class="chip" id="feel-${k}" data-act="feel" data-k="${k}" ${pressed(d.feel.includes(k))}>${l}</button>`).join('')}</div>
-      <label class="field" for="feelText"><span>還想說的話</span><textarea id="feelText" rows="3" data-bind="feelText">${esc(d.feelText)}</textarea></label>
-    </div>
+  return `<h2>牠的特徵</h2>
+    <p class="step-note"><span class="tag-seen">親眼看見</span> 只填你看清楚的，看不清楚就選「不知道」。其他人之後可以補上。</p>
+    ${demoBtn(1)}
+    ${avatarHTML()}
+    <div class="form-sec"><h3>1　毛色</h3>${pickHTML('coat', E.coat[sp], '毛色')}${pickHTML('pattern', E.pattern[sp], '花紋')}${pickHTML('tail', E.tail[sp], '尾巴')}</div>
+    <div class="form-sec"><h3>2　生命階段</h3>${pickHTML('age', E.age, '生命階段')}</div>
+    <div class="form-sec"><h3>3　性別</h3>${pickHTML('sex', E.sex, '性別')}</div>
+    <div class="form-sec"><h3>4　剪耳</h3>${pickHTML('ear', E.ear, '剪耳')}<p class="note">${esc(E.earNote)}</p></div>
+    <div class="form-sec"><h3>5　特殊生理與受傷<small>可複選</small></h3>${pickHTML('body', E.body, '特殊生理', { multi: true })}
+      <button type="button" class="chip" id="hurt-1" data-act="hurt">牠看起來受傷或受困</button>
+      <p class="note">跛行與皮膚狀況只寫在文字裡，不會畫進形象。</p></div>
+    <div class="form-sec"><h3>6　行為反應</h3>${pickHTML('react', E.react, '行為反應')}</div>
+    <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
-      <button type="button" class="btn quiet" id="back-2" data-act="step" data-n="1">上一步</button>
-      <button type="button" class="btn primary" id="next-2" data-act="step" data-n="3">下一步：公開與送出</button>
+      <button type="button" class="btn quiet" id="back-1" data-act="step" data-n="0">上一步</button>
+      <button type="button" class="btn primary" id="next-1" data-act="step" data-n="2">下一步：送出</button>
     </div>`;
 }
-const countText = d => {
-  const f = (v, l) => v === null ? '' : v === 'unk' ? `${l}數量不知道` : `${l} ${v} 隻`;
-  return [f(d.adult, '成犬'), f(d.pup, '幼犬')].filter(Boolean).join('、') || '未填';
-};
-const seenText = d => {
-  const yes = [...BEH, ...CLUE].filter(([k]) => (d.beh[k] ?? d.clue[k]) === 'yes').map(([, l]) => l);
-  const no = [...BEH, ...CLUE].filter(([k]) => (d.beh[k] ?? d.clue[k]) === 'no').map(([, l]) => '未見' + l);
-  return [countText(d), ...yes, ...no].join('、') + '。';
-};
-const feelText = d => [...FEEL.filter(([k]) => d.feel.includes(k)).map(([, l]) => l), d.feelText].filter(Boolean).join('；');
+function emergencyHTML() {
+  const e = C.ENC.emergency;
+  return `<h2>${esc(e.title)}</h2>
+    <p class="safe">${esc(e.lead)}</p>
+    <div class="form-sec"><h3>聯絡誰</h3><dl class="emg">${e.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+    <div class="form-sec"><h3>等待的時候</h3><ul class="after">${e.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
+    <div class="step-act">
+      <button type="button" class="btn primary" data-go="home">回首頁</button>
+      <button type="button" class="btn quiet" id="hurt-back" data-act="hurt-back">我按錯了，回到相遇</button>
+    </div>`;
+}
+const cueLabel = d => encLabel(C.WILD.cues, d.cue);
+const pubSummary = d => describe(d.species, d.f, d.wild) + (d.species === 'wild' ? `，${cueLabel(d)} ${d.n} 隻` : '');
+const isSensitive = d => d.species === 'wild' && !!C.SPECIES[d.wild]?.sensitive;
+/* 公開版本的區域與時間：敏感物種只到鄉鎮，並延後顯示 */
+const pubArea = d => !d.pin ? '—' : isSensitive(d) ? `${d.pin.town}（敏感物種只到鄉鎮）` : d.pin.town + d.pin.vname;
+const pubWhen = d => fmtMonth(d.when.slice(0, 7)) + (isSensitive(d) ? `，延後 ${C.WILD.delay} 天才公開` : '');
 function stepPublish() {
   const d = S.draft, p = d.pin;
   const [lon, lat] = p ? toLonLat(p.x, p.y) : ['—', '—'];
-  const hasText = d.hearsay || feelText(d);
-  return `<h2>公開與送出</h2>
-    <p class="step-note">你看見的事實會以聚合形式進入公開統計。照片和文字由你決定。</p>
-    ${demoBtn(3)}
-    <div class="form-sec"><h3>照片</h3>
-      <div class="seg" role="group" aria-label="照片是否公開">
-        <button type="button" id="pp-no" data-act="pub" data-k="pubPhoto" data-v="0" ${pressed(!d.pubPhoto)}>不公開</button>
-        <button type="button" id="pp-yes" data-act="pub" data-k="pubPhoto" data-v="1" ${pressed(d.pubPhoto)} ${d.photo ? '' : 'disabled'}>遮蔽後公開</button>
-      </div>
-      ${d.photo ? '' : '<p class="note">這筆紀錄沒有照片。</p>'}
-    </div>
-    <div class="form-sec"><h3>文字</h3>
+  return `<h2>送出</h2>
+    <p class="step-note">${isSensitive(d) ? `敏感物種的公開版本只到鄉鎮，並延後 ${C.WILD.delay} 天。` : '公開版本只到村里與月份。'}原始照片與精確位置只有團隊與照護者看得到。</p>
+    ${demoBtn(2)}
+    <div class="form-sec"><h3>想說的話<small>可略過</small></h3>
+      <p class="note">${esc(C.ENC.noteHint)}</p>
+      <label class="field" for="encNote"><span>一句話</span><textarea id="encNote" rows="3" data-bind="note" placeholder="例如：看起來很健康，警戒但不怕人">${esc(d.note)}</textarea></label>
       <div class="seg" role="group" aria-label="文字是否公開">
         <button type="button" id="pt-no" data-act="pub" data-k="pubText" data-v="0" ${pressed(!d.pubText)}>不公開</button>
-        <button type="button" id="pt-yes" data-act="pub" data-k="pubText" data-v="1" ${pressed(d.pubText)} ${hasText ? '' : 'disabled'}>願意公開</button>
+        <button type="button" id="pt-yes" data-act="pub" data-k="pubText" data-v="1" ${pressed(d.pubText)}>願意公開</button>
       </div>
-      ${hasText ? '' : '<p class="note">這筆紀錄沒有補充文字。</p>'}
     </div>
     <div class="form-sec"><h3>兩個版本的差別</h3>
       <div class="privacy">
         <div class="pv"><h4>公開版本</h4>
-          ${d.pubPhoto && d.photo ? `<div class="photo-box">${d.photo.kind === 'sample' ? scene({ masked: true }) : `<img src="${d.photo.url}" alt="" style="filter:blur(6px)">`}</div>` : ''}
-          <dl><dt>時間</dt><dd>${fmtMonth(d.when.slice(0, 7))}</dd><dt>區域</dt><dd>${p ? esc(p.town + p.vname) : '—'}</dd><dt>內容</dt><dd>${esc(seenText(d))}</dd>
-          ${d.pubText && d.hearsay ? `<dt>他人轉述</dt><dd>${esc(d.hearsay)}</dd>` : ''}
-          ${d.pubText && feelText(d) ? `<dt>想法</dt><dd>${esc(feelText(d))}</dd>` : ''}</dl>
+          <div class="pv-px">${spriteHTML(d.species, d.f, d.wild)}</div>
+          <dl><dt>時間</dt><dd>${esc(pubWhen(d))}</dd><dt>區域</dt><dd>${esc(pubArea(d))}</dd><dt>內容</dt><dd>${esc(pubSummary(d))}</dd>
+          ${d.pubText && d.note ? `<dt>想說的話</dt><dd>${esc(d.note)}</dd>` : ''}</dl>
         </div>
         <div class="pv raw"><h4>平台保留，不公開</h4>
-          <dl><dt>精確位置</dt><dd class="mono">${lat}, ${lon}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd class="mono">2026-11-07 ${d.late ? '12:30' : '07:44'}</dd><dt>原始照片</dt><dd>${d.photo ? '含定位資訊的原檔' : '無'}</dd></dl>
+          <dl><dt>精確位置</dt><dd class="mono">${lat}, ${lon}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd class="mono">2026-11-07 ${d.late ? '12:30' : '07:44'}</dd><dt>原始照片</dt><dd>${d.photo ? '只給照護者比對是不是同一隻' : '無'}</dd></dl>
         </div>
       </div>
     </div>
     <div class="form-sec"><h3>送出之後</h3>
       <ul class="after">
-        <li>團隊檢核後才會公開，照片會移除定位資訊並遮蔽門牌與人臉。</li>
-        <li>你可以之後要求更正或下架。</li>
+        <li>團隊檢核後才會公開。地圖上的動物位置只到村里或地標。</li>
+        ${d.species === 'wild' ? `<li>這筆相遇會算進這一區的「回來」${C.SPECIES[d.wild]?.rank ? '' : '；第一次記錄到這一種，會解鎖牠的物種卡'}。</li>` : '<li>系統會找出「可能是同一隻」的紀錄，由照護者確認後併進牠的個體卡。</li>'}
         <li class="no">不會有人因這筆紀錄到場。</li>
-        <li class="no">這不是陳情，公部門不會因此回覆你。</li>
+        <li class="no">抓捕、靠近餵食與追蹤稀有物種都不給分。</li>
       </ul>
     </div>
     <p class="err" id="stepErr" role="alert">${esc(S.err)}</p>
     <div class="step-act">
-      <button type="button" class="btn quiet" id="back-3" data-act="step" data-n="2">上一步</button>
-      <button type="button" class="btn primary" id="submit" data-act="submit">送出紀錄</button>
+      <button type="button" class="btn quiet" id="back-2" data-act="step" data-n="1">上一步</button>
+      <button type="button" class="btn primary" id="submit" data-act="submit">送出相遇</button>
     </div>`;
 }
 function renderStep() {
   const fid = document.activeElement?.id;
   S.mapRefs.rec?.destroy(); S.mapRefs.rec = null;
-  $('#stepBody').innerHTML = [stepScene, stepSeen, stepExtra, stepPublish][S.step]();
+  $('#stepBody').innerHTML = S.draft.hurt ? emergencyHTML() : [stepScene, stepTraits, stepPublish][S.step]();
   renderStepBar();
-  if (S.step === 0) mountRecMap();
+  if (S.step === 0 && !S.draft.hurt) mountRecMap();
   renderCards();
   if (fid) document.getElementById(fid)?.focus({ preventScroll: true });
 }
@@ -750,8 +1020,9 @@ function setPin(x, y, v) {
 }
 function goStep(n) {
   if (n > S.step) {
+    if (n >= 1 && !S.draft.species) { S.err = '先選遇見的是貓、狗還是野生動物。'; return showErr(); }
     if (n >= 1 && !S.draft.pin) { S.err = '還需要位置。請在地圖上點一下。'; return showErr(); }
-    if (n >= 2 && !hasCount(S.draft)) { S.err = '還需要犬隻數量。看不清楚可以選「不知道」。'; if (S.step !== 1) { S.step = 1; renderStep(); } return showErr(); }
+    if (n >= 2 && S.draft.species === 'wild' && !S.draft.wild) { S.err = '選一個種類；認不出來可以選「其他或認不出來」。'; if (S.step !== 1) { S.step = 1; renderStep(); } return showErr(); }
   }
   S.err = ''; S.step = n;
   renderStep();
@@ -762,20 +1033,18 @@ function fillScenario(n) {
   const d = S.draft;
   if (n === 0) {
     d.photo = { kind: 'sample' };
+    if (!d.species) d.species = 'cat';
     const v = G.villages.find(x => x.t === '銅鑼鄉' && x.v === '銅鑼村');
+    renderStep();
     setPin(v.x + 12, v.y + 8, v);
     S.mapRefs.rec?.fit(v.bb, .9);
-    $('#photoBox').innerHTML = photoHTML();
   } else if (n === 1) {
-    const steps = [() => { d.adult = 1; d.beh.rest = 'yes'; }, () => { d.pup = 3; }, () => { d.clue.bowl = 'yes'; d.beh.chase = 'no'; d.clue.collar = 'unk'; }];
-    steps.forEach((f, i) => setTimeout(() => { if (S.view === 'record' && S.step === 1) { f(); renderStep(); } }, i * 750));
-  } else if (n === 2) {
-    d.hearsay = '聽說附近曾有狗追車，但今天沒有親眼看見。';
-    d.feel = ['road', 'help'];
-    d.feelText = '路很窄，車子開得快。';
-    renderStep();
+    const f = d.f, dog = d.species === 'dog';
+    const steps = [() => { f.coat = dog ? 'yellow' : 'orange'; }, () => { f.pattern = dog ? 'chest' : 'tabby'; f.tail = dog ? 'curled' : 'kinked'; }, () => { f.age = 'adult'; f.sex = 'm'; }, () => { f.ear = 'left'; }, () => { f.react = 'keep'; }];
+    steps.forEach((g, i) => setTimeout(() => { if (S.view === 'record' && S.step === 1) { g(); renderStep(); } }, i * 700));
   } else {
-    d.pubPhoto = !!d.photo; d.pubText = !!(d.hearsay || feelText(d));
+    d.note = '看起來很健康，警戒但不怕人。';
+    d.pubText = true;
     renderStep();
   }
 }
@@ -783,12 +1052,17 @@ function viewReceipt() {
   const t = S.submitted, st = t.state || 'review';
   const idx = { review: 1, published: 3, stats: 3, returned: 1 }[st];
   return `<div class="page pad">
-    <h1 style="font-size:clamp(30px,5cqi,40px)">紀錄已送出</h1>
+    <h1 style="font-size:clamp(30px,5cqi,40px)">相遇已送出</h1>
     <div class="receipt">
-      <p class="id">${t.id}</p>
-      <p class="step-note">${esc(t.place)}。${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
+      <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
+      <p class="step-note">${esc(t.place)}。${isSensitive(t.draft) ? `敏感物種：公開時只到${esc(t.draft.pin.town)}，延後 ${C.WILD.delay} 天。` : ''}${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
+    ${t.cands?.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2>
+      <p class="sec-lede">${esc(C.ANIMAL.candNote)}</p>
+      <ul class="a-list">${t.cands.map(id => animalMini(findAnimal(id))).join('')}</ul>
+    </section>` : ''}
+    ${t.dex ? dexReceiptHTML(t) : ''}
     <section class="block"><h2 class="sec">下一步</h2>
       <div class="next two">
         <button type="button" class="btn primary" data-go="nearby">看看附近</button>
@@ -800,17 +1074,70 @@ function viewReceipt() {
     <section class="block invite"><div><h2 class="sec">想持續留意這個地方？</h2><p class="sec-lede">用同樣的方法定期觀察，才看得出變化。</p></div><button type="button" class="btn" data-go="survey">參加持續觀察</button></section>
   </div>`;
 }
+/* ───────── 物種卡（#36） ───────── */
+const SP_KEYS = () => Object.keys(C.SPECIES).filter(k => !C.SPECIES[k].rank);
+const groupLabel = g => (C.WILD.groups.find(x => x[0] === g) || [])[1] || '';
+function dexReceiptHTML(t) {
+  const W = C.WILD, k = t.draft.wild, sp = C.SPECIES[k];
+  if (t.dex === 'group' || t.dex === 'other') return `<section class="block"><h2 class="sec">物種卡</h2>
+    <p class="sec-lede">${esc(t.dex === 'group' ? W.groupNote : W.otherNote)}</p>
+    <div class="next two"><button type="button" class="btn" data-act="dex" id="rc-dex">看物種卡</button></div></section>`;
+  return `<section class="block"><h2 class="sec" id="dexHead">${t.dex === 'new' ? '解鎖新的物種卡' : '這一種你記錄過了'}</h2>
+    <p class="sec-lede">${t.dex === 'new' ? `第一次記錄到${esc(sp.name)}。你已解鎖 ${S.dex.size} 張，共 ${SP_KEYS().length} 張。` : `每一次記錄都算進這一區的「回來」，同一次散步同一種只算一次。`}</p>
+    ${speciesCardHTML(k, t.dex === 'new')}
+    <div class="next two"><button type="button" class="btn" data-act="dex" id="rc-dex">看全部物種卡</button></div>
+  </section>`;
+}
+function speciesCardHTML(k, isNew = false) {
+  const s = C.SPECIES[k], W = C.WILD, b = C.HOME.back;
+  return `<article class="sp-card${isNew ? ' new' : ''}" aria-labelledby="spn-${k}">
+    <div class="sp-top">${spriteHTML('wild', newFeat(), k, true)}
+      <div><p class="sp-group">${esc(groupLabel(s.group))}${s.sensitive ? '<span class="badge">敏感物種</span>' : ''}<span class="sample">示例，待專家撰寫</span></p>
+      <h3 id="spn-${k}">${esc(s.name)}</h3><p>${esc(s.lead)}</p></div></div>
+    <ul class="sp-look">${s.look.map(l => `<li>${esc(l)}</li>`).join('')}</ul>
+    <div class="sp-rec"><p><b>${esc(C.HOME.area)}本季 ${b.walks} 次散步中，有 ${s.rec} 次記錄到牠</b><span class="sample">示例</span></p>
+      <p class="note">${esc(W.recNote)}</p>
+      ${s.sensitive ? `<p class="note">位置只公開到鄉鎮，並延後 ${W.delay} 天；地圖上不標點。</p>` : ''}</div>
+    <ul class="after">${s.tips.map(x => `<li>${esc(x)}</li>`).join('')}<li class="no">追蹤、靠近、引誘或餵食都不給分。</li></ul>
+    <p class="note">${esc(W.cardNote)}</p>
+  </article>`;
+}
+function viewDex() {
+  const keys = SP_KEYS(), open = S.dex.has(S.spid) ? S.spid : null;
+  return `<div class="page pad">
+    <h1 style="font-size:clamp(30px,5cqi,40px)">物種卡</h1>
+    <p class="lede">第一次記錄到一種野生動物，就會解鎖牠的卡片。卡片只寫紀錄與散步的努力量，不寫數量；敏感物種的位置只到鄉鎮。</p>
+    <p class="small">已解鎖 <b>${keys.filter(k => S.dex.has(k)).length}</b> 張，共 ${keys.length} 張<span class="sample">示例</span></p>
+    <ul class="dex">${keys.map(k => {
+      const s = C.SPECIES[k], on = S.dex.has(k);
+      return `<li>${on
+        ? `<button type="button" class="a-mini" id="dx-${k}" data-act="sp-card" data-id="${k}" aria-expanded="${open === k}">${spriteHTML('wild', newFeat(), k).replace('class="px', 'class="px sm')}<span><b>${esc(s.name)}</b><span class="a-mini-sub">${esc(groupLabel(s.group))}${s.sensitive ? '・敏感物種' : ''}</span></span></button>`
+        : `<div class="a-mini locked"><span class="px sm px-unk" role="img" aria-label="還沒解鎖">?</span><span><b>還沒記錄過</b><span class="a-mini-sub">一種${esc(groupLabel(s.group))}</span></span></div>`}</li>`;
+    }).join('')}</ul>
+    ${open ? `<section class="block" id="spOpen">${speciesCardHTML(open)}</section>` : ''}
+    <section class="block invite"><div><h2 class="sec">出門記錄一次相遇</h2><p class="sec-lede">看見或聽見都可以記；認不出種，選類群也算。</p></div><button type="button" class="btn" data-act="wild-record">記錄野生動物</button></section>
+  </div>`;
+}
 function submitRecord() {
   const d = S.draft;
-  if (!d.pin) { S.err = '還需要位置。'; return showErr(); }
-  if (!hasCount(d)) { S.err = '還需要犬隻數量。'; return showErr(); }
+  if (!d.pin || !d.species) { S.err = '還需要位置和動物種類。'; return showErr(); }
   const t = {
     id: `OB-20261107-0${512 + S.done.length + S.queue.length}`, place: `${d.pin.town} ${d.pin.vname}`, time: d.when.replace('T', ' '), late: d.late, mine: true,
-    user: { adult: d.adult, pup: d.pup, photo: !!d.photo, text: [d.hearsay && `他人轉述：${d.hearsay}`, feelText(d) && `想法：${feelText(d)}`].filter(Boolean).join('\n') || '（沒有補充文字）' },
-    ai: { adult: typeof d.adult === 'number' ? d.adult : null, pup: typeof d.pup === 'number' ? d.pup : null, note: d.hearsay ? '文字含他人轉述，已和今天的觀察分開存放' : '沒有需要留意的內容' },
-    flags: d.pubPhoto && d.photo ? ['photoPlate'] : [], flagNote: d.pubPhoto && d.photo ? '公開照片要先遮蔽門牌與人臉' : '', fixed: [], human: {}, draft: copy(d),
+    user: { summary: pubSummary(d), photo: !!d.photo, text: d.note ? `想說的話（${d.pubText ? '願意公開' : '不公開'}）：${d.note}` : '（沒有補充文字）' },
+    ai: { note: d.species === 'wild' ? (isSensitive(d) ? `敏感物種：公開時只到鄉鎮，延後 ${C.WILD.delay} 天` : '野生動物相遇，算進「回來」') : '找到 0 筆可能是同一隻的紀錄（示例）' },
+    flags: [], flagNote: '', fixed: [], human: {}, draft: copy(d),
   };
   if (d.photo?.kind === 'file') t.draft.photo = d.photo;
+  if (d.species === 'wild') {
+    const k = d.wild, rank = C.SPECIES[k].rank;
+    t.dex = rank ? rank : S.dex.has(k) ? 'seen' : 'new';
+    if (!rank) S.dex.add(k);
+  } else {
+    const hits = S.animals.filter(a => sameWhy(a, d.species, d.f, d.pin.town));
+    hits.forEach(a => a.cands.unshift({ id: t.id, month: d.when.slice(0, 7), town: d.pin.town, f: copy(d.f), mine: true }));
+    t.cands = hits.map(a => a.id);
+    t.ai.note = `找到 ${hits.length} 張可能是同一隻的個體卡（示例），等照護者確認`;
+  }
   S.queue.unshift(t);
   S.submitted = t;
   render();
@@ -1167,8 +1494,8 @@ function ticketHTML(t) {
     ${t.flagNote ? `<p class="flag">${esc(t.flagNote)}${open.length ? '' : '，已處理'}</p>` : ''}
     <div class="ticket-grid ${hp ? 'has-photo' : ''}">
       <div>
-        <table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
-        <tbody>${row('成犬', 'adult')}${t.user.pup !== undefined && t.user.pup !== 0 ? row('幼犬', 'pup') : ''}</tbody></table>
+        ${t.user.summary ? `<div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild)}<p><b>${esc(t.user.summary)}</b></p></div>` : `<table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
+        <tbody>${row('成犬', 'adult')}${t.user.pup !== undefined && t.user.pup !== 0 ? row('幼犬', 'pup') : ''}</tbody></table>`}
         <p class="small" style="margin-top:8px;white-space:pre-line">${esc(t.user.text)}</p>
         <p class="note" style="margin-top:4px">AI 備註：${esc(t.ai.note)}</p>
       </div>
@@ -1233,17 +1560,16 @@ function decide(id, result, publish) {
     if (publish) {
       D.records.push({ x: d.pin.x, y: d.pin.y, vill: d.pin.code, town: d.pin.town, month: d.when.slice(0, 7), q: d.photo ? 'A' : 'B' });
       if (publish === 'full') {
-        const text = d.pubText;
+        const text = d.pubText && d.note;
         S.stories.unshift({
-          id: t.id, kind: text && (d.hearsay || feelText(d)) ? 'experience' : 'sighting', who: '你剛送出的紀錄', town: d.pin.town, month: d.when.slice(0, 7),
-          photo: d.pubPhoto && d.photo?.kind === 'sample', title: `${d.pin.vname}的一次相遇`, seen: seenText(d),
-          heard: text ? d.hearsay : '', felt: text ? feelText(d) : '',
+          id: t.id, kind: text ? 'experience' : 'sighting', who: '你剛送出的紀錄', town: d.pin.town, month: d.when.slice(0, 7),
+          title: `${d.pin.vname}的一次相遇`, seen: pubSummary(d) + '。', felt: text ? d.note : '',
         });
         S.nb.town = 'all'; S.nb.month = 'all';
       }
     }
   }
-  toast(publish === 'full' ? '已核准。公開版本已進入「看看附近」。' : publish === 'stats' ? '已列入統計，文字與照片不公開。' : '已退回。');
+  toast(publish === 'full' ? '已核准。公開版本已進入「看看附近」。' : publish === 'stats' ? '已列入統計，文字不公開。' : '已退回。');
   rerender();
 }
 
@@ -1291,7 +1617,7 @@ function viewIssues() {
 }
 
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();
@@ -1328,7 +1654,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES) });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub' });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1347,19 +1673,31 @@ const ACT = {
   prec(t) { S.draft.precision = t.dataset.v; $$('[data-act="prec"]').forEach(b => b.setAttribute('aria-pressed', b === t)); },
   late(t) { S.draft.late = !S.draft.late; t.setAttribute('aria-pressed', S.draft.late); },
   'photo-sample'() { S.draft.photo = { kind: 'sample' }; $('#photoBox').innerHTML = photoHTML(); },
-  'photo-none'() { S.draft.photo = null; S.draft.pubPhoto = false; $('#photoBox').innerHTML = ''; },
-  count(t) {
-    const k = t.dataset.k, cur = S.draft[k], n = typeof cur === 'number' ? cur : 0;
-    S.draft[k] = clamp(n + +t.dataset.d, 0, 30);
+  'photo-none'() { S.draft.photo = null; $('#photoBox').innerHTML = ''; },
+  sp(t) {
+    const d = S.draft;
+    if (d.species !== t.dataset.v) { d.species = t.dataset.v; d.f = newFeat(); d.wild = null; d.cue = 'seen'; d.n = 1; }
     S.err = ''; renderStep();
   },
-  'count-unk'(t) { const k = t.dataset.k; S.draft[k] = S.draft[k] === 'unk' ? null : 'unk'; S.err = ''; renderStep(); },
-  tri(t) { const { g, k, v } = t.dataset; S.draft[g][k] = S.draft[g][k] === v ? null : v; renderStep(); },
-  feel(t) {
-    const f = S.draft.feel, k = t.dataset.k, i = f.indexOf(k);
-    if (i >= 0) f.splice(i, 1); else f.push(k);
-    t.setAttribute('aria-pressed', i < 0);
-    renderCards();
+  hurt() { S.draft.hurt = true; S.err = ''; renderStep(); scrollTop($('#recPage')); },
+  'hurt-back'() { S.draft.hurt = false; renderStep(); },
+  ft(t) {
+    const { k, v } = t.dataset, f = S.draft.f;
+    if (k === 'body') {
+      if (v === 'unk') f.body = f.body.includes('unk') ? [] : ['unk'];
+      else { f.body = f.body.filter(x => x !== 'unk'); const i = f.body.indexOf(v); if (i >= 0) f.body.splice(i, 1); else f.body.push(v); }
+    } else f[k] = f[k] === v ? null : v;
+    renderStep();
+  },
+  cue(t) { S.draft.cue = t.dataset.v; renderStep(); },
+  dex() { S.spid = null; go('dex'); },
+  'sp-card'(t) { S.spid = S.spid === t.dataset.id ? null : t.dataset.id; rerender(); $('#spOpen')?.scrollIntoView({ block: 'nearest' }); },
+  'wild-record'() { Object.assign(S, { submitted: null, step: 0, err: '', openCard: null, seen: [], latest: '', draft: { ...newDraft(), species: 'wild' } }); go('record'); },
+  wild(t) { S.draft.wild = S.draft.wild === t.dataset.v ? null : t.dataset.v; S.err = ''; renderStep(); },
+  count(t) {
+    const k = t.dataset.k, cur = S.draft[k], n = typeof cur === 'number' ? cur : 0;
+    S.draft[k] = clamp(n + +t.dataset.d, 1, 30);
+    S.err = ''; renderStep();
   },
   pub(t) { S.draft[t.dataset.k] = t.dataset.v === '1'; renderStep(); },
   card(t) { S.openCard = S.openCard === t.dataset.id ? null : t.dataset.id; renderCards(); document.getElementById(t.id)?.focus({ preventScroll: true }); },
@@ -1400,6 +1738,69 @@ const ACT = {
   'ad-return'(t) { decide(t.dataset.id, '退回', null); },
   'card-off'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.off = !c.off; rerender(); },
   'card-extend'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.valid = '2027-06-30'; toast('已延長到 2027-06-30。下次填寫時會再浮現。'); rerender(); },
+  animal(t) { S.aid = t.dataset.id; S.diaryHits = null; S.nomText = ''; S.adErr = false; go('animal'); },
+  'nom-vote'(t) { const a = findAnimal(S.aid), n = a.noms[+t.dataset.i]; n[1]++; S.voted.push(a.id + n[0]); rerender(); toast(`已投給「${n[0]}」。`); },
+  'nom-add'() {
+    const a = findAnimal(S.aid), n = S.nomText.trim();
+    if (!n) { toast('先寫一個名字。'); $('#nomIn')?.focus(); return; }
+    const hit = a.noms.find(x => x[0] === n);
+    if (hit) { if (!S.voted.includes(a.id + n)) { hit[1]++; S.voted.push(a.id + n); } }
+    else { a.noms.push([n, 1]); S.voted.push(a.id + n); }
+    S.nomText = ''; rerender(); toast(`已提名「${n}」。`);
+  },
+  'nom-fix'() { const a = findAnimal(S.aid); a.name = [...a.noms].sort((p, q) => q[1] - p[1])[0][0]; rerender(); toast(`照護者確認了名字：${a.name}。`); },
+  'cand-yes'(t) {
+    const a = findAnimal(S.aid), [c] = a.cands.splice(+t.dataset.i, 1);
+    a.seen++; if (c.month > a.last) a.last = c.month;
+    if (a.done < 2) { a.done = 2; a.log[1] = ['2026-11', 'C1']; }
+    if (!a.squad.some(([r, g]) => r === 'carer')) a.squad.push(['carer', 'C1']);
+    if (c.mine && !a.squad.some(([, g]) => g === '你')) a.squad.push(['walker', '你']);
+    rerender(); toast(`已併進${a.name || '這隻'}的個體卡。`);
+  },
+  'cand-no'(t) { const a = findAnimal(S.aid); a.cands.splice(+t.dataset.i, 1); rerender(); toast('已標為不是同一隻。這筆相遇會留著，等系統找其他候選。'); },
+  'diary-send'() {
+    const s = S.diaryText.trim();
+    if (!s) { toast('先寫幾個字。'); $('#diaryIn')?.focus(); return; }
+    const h = riskyHits(s);
+    if (h.length) { S.diaryHits = h; rerender(); $('#diary-edit')?.focus(); return; }
+    postDiary();
+  },
+  'ad-ready'() {
+    const a = findAnimal(S.aid);
+    a.done = 4; a.log[3] = ['2026-11', 'H1'];
+    if (!a.squad.some(([, g]) => g === 'H1')) a.squad.push(['foster', 'H1']);
+    adMove(`${a.name || '牠'}準備好了，可以開始找家。`);
+  },
+  'ad-last'() { const a = findAnimal(S.aid); a.branch = 'last'; adMove('牠會由照護者守護，成為最後一代。'); },
+  'ad-back'() { const a = findAnimal(S.aid); a.branch = null; a.done = 3; adMove('回到「準備好」，等中途評估。'); },
+  'ad-q'(t) { const d = adOf(findAnimal(S.aid)); d.ans[t.dataset.k] = d.ans[t.dataset.k] === t.dataset.v ? null : t.dataset.v; rerender(); },
+  'ad-apply'() {
+    const a = findAnimal(S.aid), d = adOf(a);
+    if (!C.ADOPT.applyQs.every(([k]) => d.ans[k] === 'yes')) { S.adErr = true; rerender(); $('#adErr')?.scrollIntoView({ block: 'nearest' }); return; }
+    S.adErr = false; d.stage = 'wait';
+    if (!a.squad.some(([, g]) => g === '你')) a.squad.push(['foster', '你']);
+    adMove('申請已送出。');
+  },
+  'ad-confirm'() { adOf(findAnimal(S.aid)).stage = 'prep'; adMove('照護者與中途確認了這個家。'); },
+  'ad-check'(t) { const d = adOf(findAnimal(S.aid)), k = t.dataset.k, i = d.checks.indexOf(k); if (i >= 0) d.checks.splice(i, 1); else d.checks.push(k); rerender(); },
+  'ad-go'() {
+    const a = findAnimal(S.aid);
+    a.done = 5; a.log[4] = ['2026-11', 'H1'];
+    adMove(`${a.name || '牠'}回家了！小隊 ${a.squad.length} 人一起得到「回家」徽章。`);
+  },
+  'ad-visit'() {
+    const a = findAnimal(S.aid), d = adOf(a), [n, text] = C.ADOPT.visits[d.visits], m = { 7: '2026-11', 30: '2026-12', 90: '2027-02' }[n];
+    d.visits++;
+    a.diary.unshift([m, 'foster', '你', text]);
+    if (d.visits === C.ADOPT.visits.length) { a.done = 6; a.log[5] = [m, 'H1']; }
+    adMove(`第 ${n} 天的近況已回報${a.done === 6 ? '，旅程走完了' : ''}。`);
+  },
+  tier(t) {
+    S.tier = t.dataset.v;
+    rerender(); toast(`現在用「${C.TIERS[S.tier].name}」的眼睛看。`);
+  },
+  'diary-edit'() { S.diaryHits = null; rerender(); $('#diaryIn')?.focus(); },
+  'diary-force'() { postDiary(); },
   'req-done'(t) { S.requests.find(x => x.id === t.dataset.id).state = '已完成'; rerender(); },
 };
 document.addEventListener('click', e => {
@@ -1411,8 +1812,14 @@ document.addEventListener('click', e => {
 document.addEventListener('input', e => {
   const t = e.target;
   if (t.dataset.bind) { S.draft[t.dataset.bind] = t.value; }
+  else if (t.dataset.ui === 'nom') { S.nomText = t.value; }
+  else if (t.dataset.ui === 'adwhy') { adOf(findAnimal(S.aid)).why = t.value; }
+  else if (t.dataset.ui === 'diary') { S.diaryText = t.value; if (S.diaryHits) { S.diaryHits = null; const w = $('#diaryWarn'); if (w) w.outerHTML = '<div class="step-act"><button type="button" class="btn primary" id="diary-send" data-act="diary-send">送出日記</button></div>'; } }
   else if (t.dataset.dx === 'k') { S.dx.k = +t.value; $('#dxKv').textContent = t.value; updateData(); }
   else if (t.dataset.human) { S.queue.find(x => x.id === t.dataset.human).human[t.dataset.k] = t.value; }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id === 'nomIn' && !e.isComposing) { e.preventDefault(); ACT['nom-add'](); }
 });
 document.addEventListener('change', e => {
   const t = e.target;
