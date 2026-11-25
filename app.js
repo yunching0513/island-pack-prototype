@@ -273,7 +273,7 @@ const S = {
   queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [],
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
   animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
-  dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub',
+  dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', tut: 0,
 };
 
 /* ───────── 共用片段 ───────── */
@@ -451,11 +451,12 @@ function goalHTML(x) {
 function viewHome() {
   const H = C.HOME, h = H.home, b = H.back, st = homeStats(), J = C.JOURNEY;
   return `<div class="page pad">
+    ${tutSeen() ? '' : `<div class="tut-hint" id="tutHint"><p>${esc(C.TUTORIAL.first)}</p><div class="acts"><button type="button" class="btn sm" id="hint-go" data-go="howto">看怎麼玩</button><button type="button" class="btn quiet sm" id="hint-hide" data-act="tut-hide">不用了</button></div></div>`}
     <section class="hero">
       <div>
         <h1>讓牠們回家，讓牠們回來</h1>
         <p class="lede">出門散步，看看附近的貓狗有沒有往回家的路前進，野生動物有沒有回來。每一隻動物的旅程由好幾個人一起完成，沒有人能一個人把牠帶走。</p>
-        <div class="cta"><button type="button" class="btn primary" data-go="record">記錄相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button></div>
+        <div class="cta"><button type="button" class="btn primary" data-go="record">記錄相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button><button type="button" class="btn quiet" id="home-howto" data-go="howto">怎麼玩</button></div>
       </div>
       <section class="score" aria-labelledby="scoreArea">
         <p class="score-head"><b id="scoreArea">${esc(H.area)}</b><span>${esc(H.season)}</span><span class="sample">示例</span></p>
@@ -1616,8 +1617,41 @@ function viewIssues() {
   </div>`;
 }
 
+/* ───────── 玩法教學 ───────── */
+const TUT_KEY = 'hkk-tutorial-seen';
+const tutSeen = () => { try { return localStorage.getItem(TUT_KEY) === '1'; } catch (e) { return false; } };
+const tutMark = () => { try { localStorage.setItem(TUT_KEY, '1'); } catch (e) { /* 無痕或預覽環境不能存，下次再提示即可 */ } };
+const TUT_ICONS = {
+  record: '<path d="M24 44C16 33 10 27 10 19a14 14 0 1 1 28 0c0 8-6 14-14 25Z"/><path d="M24 12v14M17 19h14"/>',
+  card: '<rect x="9" y="5" width="30" height="38" rx="5"/><rect x="15" y="11" width="18" height="15" rx="2"/><path d="M15 32h18M15 37h11"/>',
+  journey: '<path d="M6 34h26"/><circle cx="6" cy="34" r="2" fill="currentColor"/><circle cx="15" cy="34" r="2" fill="currentColor"/><circle cx="24" cy="34" r="2" fill="currentColor"/><path d="M32 38V25l7-6 7 6v13Z"/><path d="M37 38v-6h4v6"/>',
+  wild: '<circle cx="14" cy="31" r="8"/><circle cx="34" cy="31" r="8"/><path d="M20 27h8"/><path d="M8 25 12 10h6l2 15M40 25l-4-15h-6l-2 15"/>',
+  eye: '<path d="M3 24s8-13 21-13 21 13 21 13-8 13-21 13S3 24 3 24Z"/><circle cx="24" cy="24" r="6"/>',
+  win: '<circle cx="24" cy="31" r="11"/><path d="M18 22 12 5h9l4 10M30 22l6-17h-9"/><path d="M19 31l4 4 7-8"/>',
+};
+function viewHowto() {
+  const T = C.TUTORIAL, n = T.steps.length, i = Math.max(0, Math.min(S.tut, n - 1)), s = T.steps[i], last = i === n - 1;
+  return `<div class="page pad"><div class="tut">
+    <div class="tut-top">
+      <h1>${esc(T.title)}<span>第 ${i + 1}／${n} 步</span></h1>
+      ${last ? '' : '<button type="button" class="btn quiet sm" id="tut-skip" data-act="tut-done">跳過</button>'}
+    </div>
+    <ol class="tut-dots" aria-hidden="true">${T.steps.map((_, k) => `<li class="${k < i ? 'done' : k === i ? 'cur' : ''}"></li>`).join('')}</ol>
+    <section class="tut-card" aria-labelledby="tutHead">
+      <svg class="tut-ic" viewBox="0 0 48 48" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${TUT_ICONS[s.icon] || ''}</g></svg>
+      <h2 id="tutHead" tabindex="-1">${esc(s.h)}</h2>
+      ${s.p.map(x => `<p>${esc(x)}</p>`).join('')}
+    </section>
+    <div class="tut-act">
+      ${i > 0 ? '<button type="button" class="btn" id="tut-prev" data-act="tut" data-d="-1">上一步</button>' : ''}
+      ${last ? '<button type="button" class="btn primary" id="tut-start" data-act="tut-done">開始玩</button>'
+             : '<button type="button" class="btn primary" id="tut-next" data-act="tut" data-d="1">下一步</button>'}
+    </div>
+  </div></div>`;
+}
+
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null], howto: [viewHowto, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();
@@ -1642,12 +1676,20 @@ function go(v) {
   if (!VIEWS[v]) return;
   if (S.timer) stopTimer();
   S.view = v;
+  if (v === 'howto') S.tut = 0;
   try { history.replaceState(null, '', '#' + v); } catch (e) { /* 預覽環境可能不允許 */ }
   render();
   scrollTop();
   if (matchMedia('(max-width:1099px)').matches) { document.body.dataset.rail = 'off'; syncRail(); }
 }
 const ACT = {
+  tut(t) {
+    S.tut += Number(t.dataset.d) || 0;
+    render(); scrollTop();
+    $('#tutHead')?.focus({ preventScroll: true });
+  },
+  'tut-done'() { tutMark(); go('home'); },
+  'tut-hide'() { tutMark(); render(); $('#home-howto')?.focus({ preventScroll: true }); },
   device(t) {
     document.body.dataset.device = t.dataset.v;
     $$('[data-act="device"]').forEach(b => b.setAttribute('aria-pressed', b === t));
