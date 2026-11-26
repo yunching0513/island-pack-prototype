@@ -186,8 +186,8 @@ async function wildlife() {
     return ['鳥類', '哺乳類', '爬行與兩棲'].every(l => labs.includes(l)) && await has('#wd-group-bird') && await has('#wd-group-frog') && await has('#wd-other');
   });
   await check('可以選「聽見」，隻數標題跟著改', async () => { await click('#cue-heard'); return (await text('#stepBody')).includes('同時聽見幾隻'); });
-  await check('選了敏感物種會提醒只公開到鄉鎮', async () => { await click('#wd-leopard-cat'); return (await text('#stepBody .safe')).includes('只到鄉鎮'); });
-  await check('敏感物種的公開版本只到鄉鎮、延後 30 天', async () => {
+  await check('選了敏感物種會提醒只公開到行政區', async () => { await click('#wd-leopard-cat'); return (await text('#stepBody .safe')).includes('只到行政區'); });
+  await check('敏感物種的公開版本只到行政區、延後 30 天', async () => {
     await click('#next-1');
     const pub = await text('.pv:not(.raw)');
     await shot('wild-1-publish');
