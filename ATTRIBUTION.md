@@ -33,3 +33,6 @@
 - 野生動物尚未經專家審閱。候選名單及遊戲表情不能用來推定現場物種、行為、保育等級或里尺度分布。
 
 - `assets/pixel-pals-eat.png`、`pixel-pals-drink.png`、`pixel-pals-happy.png`、`pixel-pals-angry.png`：以選定角色為參考重繪的完整姿勢／表情圖集，喝水採使用者選定的第二版。碗與嘴巴同屬圖稿，動畫僅微幅變形，避免姿勢錯位。
+
+- `assets/pixel-pals-sad.png`：以選定角色為參考生成的難過表情圖集，眼淚與眉眼直接畫在完整角色上。
+- `assets/wildlife-{a,b}-{happy,angry,sad}.png`：12 種野生動物各三種擬人化表情，共 36 個生成式角色造型；以既有造型圖集保留辨識輪廓。用於遊戲與設計比較，不能用來推定野生動物實際情緒或健康。

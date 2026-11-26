@@ -15,7 +15,7 @@
     {id:'eat',name:'吃飯',hint:'嘴巴貼近食物，小幅點頭咀嚼，碗留在地面。'},
     {id:'drink',name:'喝水',hint:'低頭伸舌舔水，舌尖貼近水面，水碗留在地面。'},
     {id:'happy',name:'喜悅',hint:'笑彎眼睛、張嘴微笑，開心跳起。'},
-    {id:'sad',name:'難過',hint:'低低垂頭，慢慢晃動，落下一滴眼淚。'},
+    {id:'sad',name:'難過',hint:'垂下耳朵、皺起眉頭，眼裡含著淚光。'},
     {id:'angry',name:'生氣',hint:'皺眉、鼓起臉頰、嘴角向下，氣呼呼地跺腳。'},
     {id:'love',name:'愛心',hint:'親暱地歪頭，愛心慢慢飄上來。'}
   ];
@@ -25,7 +25,7 @@
   });
   const ready = Promise.all([
     loadImage(atlas,window.PIXEL_PALS_ATLAS || 'assets/pixel-pals-atlas.png?v=20261126'),
-    ...['eat','drink','happy','angry'].map(action=>{
+    ...['eat','drink','happy','angry','sad'].map(action=>{
       illustrations[action]=new Image();
       return loadImage(illustrations[action],'assets/pixel-pals-'+action+'.png?v=poses-20261126');
     })
@@ -124,10 +124,6 @@
       c.drawImage(this.pose.render(pet,a,t),-PAD,-PAD);
       c.restore();
       // Effects stay in stage space; expressions are part of the illustrated face.
-      if(a==='sad'){
-        const q=(t*1.2)%1,ex=this.direction===1?430:210;
-        c.fillStyle='#6caed5';c.fillRect(ex,225+q*70,5,8);c.fillRect(ex-2,230+q*70,9,6);
-      }
       if(a==='love')for(let i=0;i<4;i++){const q=(t*.36+i*.25)%1;c.globalAlpha=Math.min(1,q*6)*(1-q);heart(c,220+i*50,150-q*105,2+(i%2),'#d97086');}c.globalAlpha=1;
       if(a==='happy')for(let i=0;i<5;i++){const q=t*3+i;c.fillStyle=i%2?'#d9a451':'#6e9c6a';const xx=160+i*72,yy=96+Math.sin(q)*15;c.fillRect(xx,yy,4,15);c.fillRect(xx-5,yy+5,14,4);}
       if(a==='angry'){const xx=470,yy=78;stroke(c,[[xx,yy],[xx+11,yy],[xx+11,yy+11]],'#b9594e',4);stroke(c,[[xx+20,yy+11],[xx+20,yy+20],[xx+11,yy+20]],'#b9594e',4);}
