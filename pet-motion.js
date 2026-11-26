@@ -1,5 +1,5 @@
-/* Pixel Pals motion study. The original atlas stays intact; canvas layers form
-   a small 2D puppet. These are interaction sketches, not biological behaviour. */
+/* Pixel Pals: a continuous inverse warp of the intact character texture.
+   No disjoint body-part masks; expressions never paint over the original face. */
 (() => {
   'use strict';
   const SIZE = 112;
@@ -10,36 +10,55 @@
     {id:'calico',name:'三花貓',crop:[765,535,555,530],coat:'#f4e3c6'}
   ];
   const ACTIONS = [
-    {id:'idle',name:'待機',hint:'輕輕呼吸，眨一下眼睛。'},
+    {id:'idle',name:'待機',hint:'輕輕呼吸，身體微微起伏。'},
     {id:'run',name:'奔跑',hint:'交替擺腿，尾巴跟著跑步節奏晃動。'},
     {id:'eat',name:'吃飯',hint:'低頭吃飯，嘴邊有小小碎屑。'},
     {id:'drink',name:'喝水',hint:'低頭喝水，碗裡泛起一圈圈波紋。'},
-    {id:'happy',name:'喜悅',hint:'開心跳起，眼睛瞇成小月牙。'},
+    {id:'happy',name:'喜悅',hint:'開心跳起，身邊亮起小星星。'},
     {id:'sad',name:'難過',hint:'低低垂頭，慢慢晃動，落下一滴眼淚。'},
-    {id:'angry',name:'生氣',hint:'皺眉、跺腳，再冒出小小的怒氣符號。'},
+    {id:'angry',name:'生氣',hint:'氣呼呼地跺腳，冒出小小的怒氣符號。'},
     {id:'love',name:'愛心',hint:'親暱地歪頭，愛心慢慢飄上來。'}
   ];
   const atlas = new Image();
   const ready = new Promise((resolve,reject) => {atlas.onload=resolve;atlas.onerror=()=>reject(Error('角色圖載入失敗'));});
   atlas.src = window.PIXEL_PALS_ATLAS || 'assets/pixel-pals-atlas.png?v=20261126';
   const cache = new Map();
-  const head = [[.36,0],[1,0],[1,.66],[.68,.69],[.43,.6],[.36,.36]];
-  const tail = [[0,0],[.36,0],[.36,.4],[.31,.57],[.16,.67],[0,.72]];
-  function inside(x,y,p) {let s=false;for(let i=0,j=p.length-1;i<p.length;j=i++)if(((p[i][1]>y)!=(p[j][1]>y))&&(x<(p[j][0]-p[i][0])*(y-p[i][1])/(p[j][1]-p[i][1])+p[i][0]))s=!s;return s;}
-  function layers(pet) {
+  const PAD = 16, POSE_SIZE = SIZE + PAD * 2;
+  const smooth = v => {v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
+  function texture(pet) {
     if(cache.has(pet.id))return cache.get(pet.id);
-    const src=document.createElement('canvas');src.width=src.height=SIZE;
-    const sx=src.getContext('2d',{willReadFrequently:true});sx.imageSmoothingEnabled=false;sx.drawImage(atlas,...pet.crop,0,0,SIZE,SIZE);
-    const names=['body','tail','head','leg0','leg1','leg2','leg3'];
-    const data=sx.getImageData(0,0,SIZE,SIZE),parts=Object.fromEntries(names.map(n=>[n,sx.createImageData(SIZE,SIZE)]));
-    for(let y=0;y<SIZE;y++)for(let x=0;x<SIZE;x++) {
-      const i=(y*SIZE+x)*4;if(!data.data[i+3])continue;
-      const u=x/SIZE,v=y/SIZE;
-      let key=inside(u,v,head)?'head':inside(u,v,tail)?'tail':v>.73?'leg'+(u<.28?0:u<.43?1:u<.63?2:3):'body';
-      parts[key].data.set(data.data.subarray(i,i+4),i);
+    const cv=document.createElement('canvas');cv.width=cv.height=SIZE;
+    const c=cv.getContext('2d',{willReadFrequently:true});c.imageSmoothingEnabled=false;
+    c.drawImage(atlas,...pet.crop,0,0,SIZE,SIZE);
+    const pixels=c.getImageData(0,0,SIZE,SIZE).data;cache.set(pet.id,pixels);return pixels;
+  }
+  // One smooth displacement field across the whole animal. Inverse sampling
+  // fills every output pixel, so moving joints cannot expose polygon seams.
+  function motionAt(a,t) {
+    const angle=a==='eat'||a==='drink'?.24+.025*Math.sin(t*15):a==='sad'?.055:a==='love'?.035*Math.sin(t*2):0;
+    return {a,co:Math.cos(angle),si:Math.sin(angle),stride:Math.sin(t*Math.PI*5.4),wag:Math.sin(t*(a==='sad'?1.5:8))*(a==='love'||a==='happy'?2:1)};
+  }
+  function displacement(x,y,a,t,m=motionAt(a,t)) {
+    const head=smooth((80-y)/45)*smooth((x-30)/24);
+    const tail=smooth((40-x)/24)*smooth((77-y)/38);
+    const feet=smooth((y-72)/35),{stride,co,si}=m,hx=x-62,hy=y-67;
+    const dx=head*(hx*(co-1)-hy*si)+tail*m.wag;
+    const dy=head*(hx*si+hy*(co-1))+(a==='run'?feet*4*stride*Math.sin((x-10)*.095):0);
+    return [dx+(a==='run'?feet*2*stride:0),dy];
+  }
+  class Pose {
+    constructor(){this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=POSE_SIZE;this.ctx=this.canvas.getContext('2d');this.image=this.ctx.createImageData(POSE_SIZE,POSE_SIZE);}
+    render(pet,a,t){
+      const src=texture(pet),out=this.image.data,m=motionAt(a,t);out.fill(0);
+      for(let y=0;y<POSE_SIZE;y++)for(let x=0;x<POSE_SIZE;x++){
+        const tx=x-PAD,ty=y-PAD;let sx=tx,sy=ty;
+        for(let k=0;k<4;k++){const d=displacement(sx,sy,a,t,m);sx=tx-d[0];sy=ty-d[1];}
+        const ix=Math.round(sx),iy=Math.round(sy);if(ix<0||iy<0||ix>=SIZE||iy>=SIZE)continue;
+        const i=(iy*SIZE+ix)*4,j=(y*POSE_SIZE+x)*4;
+        out[j]=src[i];out[j+1]=src[i+1];out[j+2]=src[i+2];out[j+3]=src[i+3];
+      }
+      this.ctx.putImageData(this.image,0,0);return this.canvas;
     }
-    const result={};for(const n of names){const c=document.createElement('canvas');c.width=c.height=SIZE;c.getContext('2d').putImageData(parts[n],0,0);result[n]=c;}
-    cache.set(pet.id,result);return result;
   }
   const TAU=Math.PI*2;
   function heart(ctx,x,y,s,color) {
@@ -48,7 +67,7 @@
   }
   function stroke(ctx,pts,color,width=3){ctx.strokeStyle=color;ctx.lineWidth=width;ctx.lineCap='square';ctx.lineJoin='miter';ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();}
   class Animator {
-    constructor(canvas,pet='gold',action='idle') {this.canvas=canvas;this.ctx=canvas.getContext('2d');this.pet=pet;this.action=action;this.time=0;this.speed=1;this.playing=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.direction=1;this.frame=null;this.last=0;this.tick=this.tick.bind(this);this.frame=requestAnimationFrame(this.tick);}
+    constructor(canvas,pet='gold',action='idle') {this.canvas=canvas;this.ctx=canvas.getContext('2d');this.pose=new Pose();this.pet=pet;this.action=action;this.time=0;this.speed=1;this.playing=!matchMedia('(prefers-reduced-motion: reduce)').matches;this.direction=1;this.frame=null;this.last=0;this.tick=this.tick.bind(this);this.frame=requestAnimationFrame(this.tick);}
     set(pet,action){this.pet=pet;this.action=action;this.time=0;this.updateLabel();}
     updateLabel(){this.canvas.setAttribute('aria-label',`${PETS.find(p=>p.id===this.pet).name}：${ACTIONS.find(a=>a.id===this.action).name}動作預覽`);}
     destroy(){cancelAnimationFrame(this.frame);}
@@ -58,39 +77,25 @@
       c.clearRect(0,0,W,H);c.save();c.scale(W/640,H/400);c.imageSmoothingEnabled=false;
       c.fillStyle='#e8f0e7';c.fillRect(0,0,640,400);c.fillStyle='#d9e5d4';c.fillRect(0,329,640,71);
       c.fillStyle='#c1d1bc';for(let i=0;i<10;i++)c.fillRect(((i*83-(this.action==='run'?t*160:0))%720+720)%720-40,350+(i%3)*12,20+(i%3)*7,3);
-      const pet=PETS.find(p=>p.id===this.pet),p=layers(pet),a=this.action,f=Math.sin(t*TAU*2.7),slow=Math.sin(t*TAU*.7);
-      let x=167,y=44,sy=1,tilt=0,hr=0,dy=0;
+      const pet=PETS.find(p=>p.id===this.pet),a=this.action,f=Math.sin(t*TAU*2.7),slow=Math.sin(t*TAU*.7);
+      let x=167,y=44,sy=1,tilt=0;
       if(a==='run'){x+=Math.sin(t*4)*8;y-=Math.abs(f)*13;tilt=.025*f;}
-      if(a==='happy'){y-=Math.max(0,Math.sin(t*TAU*1.6))*39;sy=1-.025*Math.cos(t*TAU*1.6);hr=.06*slow;}
-      if(a==='sad'){y+=8;hr=.13+.03*slow;sy=.96;}
-      if(a==='angry'){x+=Math.sin(t*35)*2;y-=Math.max(0,Math.sin(t*TAU*2))*5;hr=-.06;}
-      if(a==='love'){hr=Math.sin(t*2)*.1;y+=slow*2;}
+      if(a==='happy'){y-=Math.max(0,Math.sin(t*TAU*1.6))*39;sy=1-.025*Math.cos(t*TAU*1.6);}
+      if(a==='sad'){y+=8;sy=.96;}
+      if(a==='angry'){x+=Math.sin(t*35)*2;y-=Math.max(0,Math.sin(t*TAU*2))*5;}
+      if(a==='love'){y+=slow*2;}
       if(a==='idle'){y+=Math.sin(t*2)*1.4;sy=1+.006*Math.sin(t*2);}
-      if(a==='eat'||a==='drink'){y+=18;sy=.94;hr=.68+.045*Math.sin(t*TAU*(a==='eat'?2.4:3));dy=8;}
+      if(a==='eat'||a==='drink'){y+=18;sy=.94;tilt=.025*Math.sin(t*15);}
       c.fillStyle='rgba(47,78,45,.12)';c.beginPath();c.ellipse(310,330,114-(a==='happy'?Math.max(0,Math.sin(t*TAU*1.6))*14:0),12,0,0,TAU);c.fill();
       if(a==='run')for(let i=0;i<4;i++){c.fillStyle='rgba(113,138,99,.3)';c.fillRect(140-((t*130+i*25)%90),315+i*4,14-i*2,4);}
       c.save();if(this.direction===-1){c.translate(640,0);c.scale(-1,1);}c.translate(x,y);c.scale(2.6,2.6*sy);c.rotate(tilt);
-      const layer=(name,px,py,r=0,ox=0,oy=0)=>{c.save();c.translate(px+ox,py+oy);c.rotate(r);c.drawImage(p[name],-px,-py);c.restore();};
-      const legRot=a==='run'?.44*f:a==='angry'?.09*Math.sin(t*13):0;
-      layer('leg1',39,81,-legRot);layer('leg3',80,81,legRot);
-      layer('tail',26,62,(a==='happy'||a==='love'?.25:.08)*Math.sin(t*(a==='sad'?1.5:8)));
-      c.fillStyle=pet.coat;c.fillRect(47,56,20,22); // neck beneath the turning head
-      layer('body',56,72);
-      layer('leg0',23,82,legRot);layer('leg2',58,82,-legRot);
-      c.save();c.translate(59,65+dy);c.rotate(hr);c.drawImage(p.head,-59,-65);
-      const eye=(ex,ey,w,h,kind)=>{
-        c.fillStyle=pet.coat;c.beginPath();c.ellipse(ex,ey,w,h,0,0,TAU);c.fill();
-        if(kind==='smile')stroke(c,[[ex-w*.65,ey+1],[ex-2,ey-2],[ex+2,ey-2],[ex+w*.65,ey+1]],'#35251e',1.8);
-        else stroke(c,[[ex-w*.7,ey],[ex+w*.7,ey]],'#35251e',1.8);
-      };
-      const blink=a==='idle'&&t%4.2>3.95;
-      if(a==='happy'||a==='love'||blink){eye(68,43,9,10,blink?'blink':'smile');eye(93,35,7,8,blink?'blink':'smile');}
-      if(a==='angry'){stroke(c,[[60,29],[76,35]],'#35251e',2.3);stroke(c,[[87,29],[99,24]],'#35251e',2.3);}
+      c.drawImage(this.pose.render(pet,a,t),-PAD,-PAD);
+      c.restore();
+      // Effects stay in stage space; the original eyes and face stay intact.
       if(a==='sad'){
-        stroke(c,[[60,31],[74,27]],'#594033',1.7);stroke(c,[[88,23],[99,27]],'#594033',1.7);
-        const q=(t*1.2)%1;c.fillStyle='#6caed5';c.fillRect(75,49+q*12,2,4);c.fillRect(74,52+q*12,4,3);
+        const q=(t*1.2)%1,ex=this.direction===1?430:210;
+        c.fillStyle='#6caed5';c.fillRect(ex,225+q*70,5,8);c.fillRect(ex-2,230+q*70,9,6);
       }
-      c.restore();c.restore();
       const mouthX=this.direction===1?440:200;
       if(a==='eat'||a==='drink'){
         const bx=mouthX-17;c.fillStyle=a==='drink'?'#649bb9':'#ad7751';c.fillRect(bx,324,76,9);c.fillRect(bx+7,333,62,17);c.fillStyle='#e9debe';c.fillRect(bx+4,321,68,5);
@@ -108,5 +113,5 @@
       c.restore();
     }
   }
-  window.PixelPals={ready,PETS,ACTIONS,Animator};
+  window.PixelPals={ready,PETS,ACTIONS,Animator,displacement};
 })();

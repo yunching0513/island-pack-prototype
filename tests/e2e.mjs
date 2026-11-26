@@ -420,6 +420,27 @@ async function taipeiAndMotion() {
     return (await js(`document.getElementById('mainCanvas').toDataURL().length`))>3000;
   });
   await check('暫停與播放控制可切換', async () => {await click('#pause');const stopped=(await text('#pause'))==='播放';await click('#pause');return stopped && (await text('#pause'))==='暫停';});
+  await check('32 種角色動作跨影格保持連接，沒有裁切或分離的身體零件', async () => js(`(() => {
+    const P=PixelPals, cv=document.createElement('canvas');cv.width=640;cv.height=400;
+    const anim=new P.Animator(cv);anim.destroy();
+    for(const pet of P.PETS) for(const action of P.ACTIONS) for(const t of [0,.09,.22,.4,.7,1.1]) {
+      anim.set(pet.id,action.id);anim.render(t);
+      const pose=anim.pose.canvas,W=pose.width,d=pose.getContext('2d').getImageData(0,0,W,W).data,seen=new Uint8Array(W*W),parts=[];
+      for(let i=0;i<W*W;i++) {
+        if(d[i*4+3]<180||seen[i])continue;
+        const queue=[i];seen[i]=1;let count=0;
+        for(let n=0;n<queue.length;n++) {
+          const at=queue[n],x=at%W,y=Math.floor(at/W);count++;
+          if(x===0||y===0||x===W-1||y===W-1)return false;
+          for(const next of [at-1,at+1,at-W,at+W])if(next>=0&&next<W*W&&!seen[next]&&d[next*4+3]>=180){seen[next]=1;queue.push(next);}
+        }
+        parts.push(count);
+      }
+      parts.sort((a,b)=>b-a);
+      if(!parts.length||parts[0]<4000||parts.slice(1).some(n=>n>25))return false;
+    }
+    return true;
+  })()`));
   for(const w of [1360,375,320]){await size(w);await check(`動作頁 ${w}px 沒有橫向溢出`,async()=>await overflow()===0);}
   console.log('野生動物造型候選');
   await visit('wildlife.html');
