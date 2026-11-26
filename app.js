@@ -330,13 +330,43 @@ function spriteFiles(sp, f) {
 }
 const pxImgs = new Map(), pxOut = new Map(), pxSpec = new Map();
 const PX_ASSET_VERSION = 'big-eyes-20261126';
+// Shared approved artwork for the street scene and animal cards. These are
+// character illustrations; detailed ear/tail/condition records remain text.
+const PET_PORTRAITS = {
+  gold: ['pixel-pals-atlas.png', [145,14,540,510]],
+  blackDog: ['pixel-pals-atlas.png', [765,14,535,510]],
+  tabby: ['pixel-pals-atlas.png', [145,535,550,530]],
+  calico: ['pixel-pals-atlas.png', [765,535,555,530]],
+  blackCat: ['pixel-pals-extra.png', [0,0,724,724]],
+  kitten: ['pixel-pals-extra.png', [724,0,724,724]],
+  brownDog: ['pixel-pals-extra.png', [1448,0,724,724]]
+};
+function portraitOf(sp, f) {
+  if (sp === 'cat') {
+    if (f.pattern === 'calico') return 'calico';
+    if (f.coat === 'black') return 'blackCat';
+    if (f.coat === 'orange') return 'tabby';
+    if (f.coat === 'white' && f.pattern === 'tabby') return 'kitten';
+  }
+  if (sp === 'dog') return {yellow:'gold',black:'blackDog',brown:'brownDog'}[f.coat];
+  return null;
+}
 const loadPx = f => {
   if (!pxImgs.has(f)) pxImgs.set(f, new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => no(new Error(f)); i.src = 'assets/' + f + '?v=' + PX_ASSET_VERSION; }));
   return pxImgs.get(f);
 };
 async function composePx(key) {
   if (pxOut.has(key)) return pxOut.get(key);
-  const { files, coat } = pxSpec.get(key), imgs = await Promise.all(files.map(loadPx));
+  const { files, coat, portrait } = pxSpec.get(key);
+  if (portrait) {
+    const [file, crop] = PET_PORTRAITS[portrait], im = await loadPx(file);
+    const cv = document.createElement('canvas'); cv.width = cv.height = 112;
+    const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
+    const scale = 104 / Math.max(crop[2], crop[3]);
+    x.drawImage(im, ...crop, (112-crop[2]*scale)/2, (112-crop[3]*scale)/2, crop[2]*scale, crop[3]*scale);
+    const url = cv.toDataURL(); pxOut.set(key, url); return url;
+  }
+  const imgs = await Promise.all(files.map(loadPx));
   const cv = document.createElement('canvas'); cv.width = cv.height = 48;
   const x = cv.getContext('2d', { willReadFrequently: true }), out = x.createImageData(48, 48), o = out.data, pal = COATS[coat] || COATS.unk;
   for (const im of imgs) {
@@ -363,7 +393,14 @@ function describe(sp, f, w) {
     ...f.body.filter(known).map(b => encLabel(E.body, b)), known(f.react) && encLabel(E.react, f.react)].filter(Boolean);
   return [head, ...more].join('，');
 }
-function spriteHTML(sp, f, w, big = false) {
+function spriteHTML(sp, f, w, big = false, illustration = true) {
+  const portrait = illustration && portraitOf(sp, f);
+  if (portrait) {
+    const key = 'portrait-v1|' + portrait;
+    pxSpec.set(key, { portrait });
+    const label = `角色示意：${describe(sp, f, w)}；實際外觀特徵以文字紀錄為準`;
+    return `<img class="px${big ? ' big' : ''}" src="${pxOut.get(key) || PX_EMPTY}" data-px="${key}" data-portrait="${portrait}" width="112" height="112" alt="${esc(label)}" title="角色造型示意，毛色、剪耳、尾巴與身體特徵請見文字紀錄">`;
+  }
   const alt = `像素形象：${describe(sp, f, w)}（暫代圖）`;
   if (sp === 'wild' && (!w || w === 'other')) return `<span class="px px-unk${big ? ' big' : ''}" role="img" aria-label="${esc(alt)}">?</span>`;
   const files = spriteFiles(sp, { ...f, wild: w }), coat = sp === 'wild' ? null : known(f.coat) ? f.coat : 'unk';
@@ -911,7 +948,7 @@ function pickHTML(k, list, label, { multi = false, unk = true } = {}) {
 }
 function avatarHTML() {
   const d = S.draft;
-  return `<div class="avatar">${spriteHTML(d.species, d.f, d.wild, true)}<div><p><b>${esc(describe(d.species, d.f, d.wild))}</b></p>
+  return `<div class="avatar">${spriteHTML(d.species, d.f, d.wild, true, false)}<div><p><b>${esc(describe(d.species, d.f, d.wild))}</b></p>
     <p class="note">形象由你填的特徵疊出來，同樣的特徵每次都畫出同一張圖；其他人補上特徵時，形象也會跟著變。目前是暫代圖。</p></div></div>`;
 }
 const wildChip = k => {
@@ -997,7 +1034,7 @@ function stepPublish() {
     <div class="form-sec"><h3>兩個版本的差別</h3>
       <div class="privacy">
         <div class="pv"><h4>公開版本</h4>
-          <div class="pv-px">${spriteHTML(d.species, d.f, d.wild)}</div>
+          <div class="pv-px">${spriteHTML(d.species, d.f, d.wild, false, false)}</div>
           <dl><dt>時間</dt><dd>${esc(pubWhen(d))}</dd><dt>區域</dt><dd>${esc(pubArea(d))}</dd><dt>內容</dt><dd>${esc(pubSummary(d))}</dd>
           ${d.pubText && d.note ? `<dt>想說的話</dt><dd>${esc(d.note)}</dd>` : ''}</dl>
         </div>
@@ -1096,7 +1133,7 @@ function viewReceipt() {
   return `<div class="page pad">
     <h1 style="font-size:clamp(30px,5cqi,40px)">相遇已送出</h1>
     <div class="receipt">
-      <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
+      <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true, false)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
       <p class="step-note">${esc(t.place)}。${isSensitive(t.draft) ? `敏感物種：公開時只到${esc(t.draft.pin.town)}，延後 ${C.WILD.delay} 天。` : ''}${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
       <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
     </div>
@@ -1537,7 +1574,7 @@ function ticketHTML(t) {
     ${t.flagNote ? `<p class="flag">${esc(t.flagNote)}${open.length ? '' : '，已處理'}</p>` : ''}
     <div class="ticket-grid ${hp ? 'has-photo' : ''}">
       <div>
-        ${t.user.summary ? `<div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild)}<p><b>${esc(t.user.summary)}</b></p></div>` : `<table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
+        ${t.user.summary ? `<div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, false, false)}<p><b>${esc(t.user.summary)}</b></p></div>` : `<table class="compare"><thead><tr><th>欄位</th><th>提供者</th><th>AI 建議</th><th>人工決定</th></tr></thead>
         <tbody>${row('成犬', 'adult')}${t.user.pup !== undefined && t.user.pup !== 0 ? row('幼犬', 'pup') : ''}</tbody></table>`}
         <p class="small" style="margin-top:8px;white-space:pre-line">${esc(t.user.text)}</p>
         <p class="note" style="margin-top:4px">AI 備註：${esc(t.ai.note)}</p>
