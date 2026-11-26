@@ -261,9 +261,63 @@ async function tutorial() {
   await js(`localStorage.clear()`); // 後面的點擊目標、對比與版面檢查也要看得到提示
 }
 
+async function roles() {
+  console.log('角色示範（#37）');
+  await size(375); await open('home');
+  await check('原型外框有角色按鈕，預設是散步者', async () => (await text('#roleBtn')) === '角色：散步者');
+  await check('進入角色示範，六個角色都能切換', async () => {
+    await click('#roleBtn');
+    const ids = await js(`[...document.querySelectorAll('[data-act="role"]')].map(b => b.id)`);
+    return (await js('location.hash')) === '#roles' && ['walker', 'carer', 'eco', 'story', 'foster', 'neighbor'].every(k => ids.includes('role-' + k));
+  });
+  await check('切到照護者：外框跟著改，用照護級的眼睛看', async () => {
+    await click('#role-carer');
+    return (await text('#roleBtn')) === '角色：照護者' && (await text('#roleNow')).includes('照護') && (await js(`document.getElementById('role-carer').getAttribute('aria-pressed')`)) === 'true';
+  });
+  await check('照護者的專屬行動打開幼貓的個體卡，看得到餵食點那一級', async () => {
+    await click('#role-act');
+    return (await js('location.hash')) === '#animal' && (await js(`document.getElementById('tier-care')?.getAttribute('aria-pressed')`)) === 'true' && !(await has('#diaryLock'));
+  });
+  await check('每個有專屬行動的角色都會去到對的畫面', async () => {
+    const want = { walker: 'survey', eco: 'dex', story: 'animal', foster: 'animal' }, bad = [];
+    for (const [k, v] of Object.entries(want)) {
+      await click('#roleBtn'); await click('#role-' + k); await click('#role-act');
+      if ((await js('location.hash')) !== '#' + v) bad.push(k);
+    }
+    if (bad.length) throw new Error(bad.join('、'));
+  });
+  await check('回到散步者是公開級，個體卡的日記鎖起來', async () => {
+    await click('#roleBtn'); await click('#role-walker'); await open('home');
+    await click('#roleBtn'); await click('#role-walker'); await animal('a1');
+    return await has('#diaryLock');
+  });
+  await check('鄰居沒有選困擾與地點就送出，會提示', async () => {
+    await click('#roleBtn'); await click('#role-neighbor');
+    await click('#gripe-send');
+    return (await text('#gripeErr')).includes('先選') && !(await has('#role-act'));
+  });
+  await check('鄰居提出的困擾變成地區任務，列出誰來幫忙', async () => {
+    const before = await js(`document.querySelectorAll('.tasks li').length`);
+    await click('#gp-noise'); await click('#gpl-1'); await click('#gripe-send');
+    await shot('roles-1-task');
+    const first = await text('.tasks li');
+    return (await js(`document.querySelectorAll('.tasks li').length`)) === before + 1 && first.includes('老街一帶') && first.includes('夜裡很吵') && first.includes('照護者') && first.includes('你剛提出');
+  });
+  await check('地區任務不出現捕捉、移除、驅趕或收編', async () => {
+    const t = await text('.tasks');
+    return !/捕捉|捕抓|移除|驅趕|收編|撲殺/.test(t) && (await text('#gripeSec')).includes('不會出現捕捉');
+  });
+  await check('示例任務標示「示例」', async () => (await text('#task-t0')).includes('示例'));
+  await check('重設原型會回到散步者、清掉新任務', async () => {
+    await js(`document.querySelector('[data-act="reset"]').click()`); await sleep(100);
+    return (await text('#roleBtn')) === '角色：散步者' && !(await has('#task-t2'));
+  });
+  await click('#roleBtn'); await shot('roles-0-pick');
+}
+
 async function layout() {
   console.log('版面：沒有橫向捲動');
-  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal', 'dex', 'howto'];
+  const views = ['home', 'record', 'survey', 'nearby', 'data', 'admin', 'issues', 'animal', 'dex', 'howto', 'roles'];
   for (const w of [1360, 375, 320]) for (const dark of [false, true]) {
     await size(w, dark);
     const bad = [];
@@ -282,6 +336,8 @@ async function layout() {
     await wildRecord('leopard-cat', 'heard'); let o = await overflow(); if (o > 0) bad.push(`wild:traits/publish(${o}px)`);
     await click('#submit'); o = await overflow(); if (o > 0) bad.push(`wild:receipt(${o}px)`);
     await click('#rc-dex'); await click('#dx-leopard-cat'); o = await overflow(); if (o > 0) bad.push(`dex:open(${o}px)`);
+    await click('#roleBtn'); await click('#role-neighbor'); await click('#gp-fear'); await click('#gpl-2'); await click('#gripe-send');
+    o = await overflow(); if (o > 0) bad.push(`roles:neighbor(${o}px)`); await click('#role-walker');
     await check(`${w}px ${dark ? '深色' : '淺色'}`, () => { if (bad.length) throw new Error(bad.join('、')); });
   }
 }
@@ -295,7 +351,7 @@ async function targets() {
   });
   // 改版後的畫面：所有按鈕、連結按鈕與摘要列至少 44px 高（WCAG 2.5.8 只要 24px，這裡照專案自己的 44px）
   const SMALL = `[...document.querySelectorAll('#view button, #view a.btn, #view summary')].filter(b => { const r = b.getBoundingClientRect(); return r.width && r.height < 44; }).map(b => b.id || b.textContent.trim().slice(0, 12))`;
-  for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); }], ['dex'], ['howto']]) {
+  for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); }], ['dex'], ['howto'], ['roles', async () => { await open('roles'); await click('#role-neighbor'); }]]) {
     await check(`${v}：按鈕至少 44px 高`, async () => {
       if (prep) await prep(); else await open(v);
       const small = await js(SMALL); if (small.length) throw new Error(small.join('、'));
@@ -325,7 +381,7 @@ async function contrast() {
   console.log('文字對比');
   for (const dark of [false, true]) {
     await size(375, dark);
-    for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); await js(`document.getElementById('tierWhy').open = true`); }], ['dex'], ['record'], ['howto']]) {
+    for (const [v, prep] of [['home'], ['animal', async () => { await open('home'); await animal('a1'); await click('#tier-squad'); await js(`document.getElementById('tierWhy').open = true`); }], ['dex'], ['record'], ['howto'], ['roles', async () => { await open('roles'); await click('#role-neighbor'); await click('#gripe-send'); }]]) {
       await check(`${v} ${dark ? '深色' : '淺色'}：文字對比足夠`, async () => {
         if (prep) await prep(); else await open(v);
         // 教學每一步只有幾段字，最少元素數放寬到 5
@@ -385,6 +441,7 @@ try {
   await tiers();
   await wildlife();
   await tutorial();
+  await roles();
   await targets();
   await contrast();
   await layout();

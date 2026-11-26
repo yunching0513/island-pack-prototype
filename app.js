@@ -274,6 +274,7 @@ const S = {
   cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES),
   animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
   dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', tut: 0,
+  role: 'walker', gripe: { kind: null, place: null }, gripeErr: '', tasks: copy(C.ROLE.tasks),
 };
 
 /* ───────── 共用片段 ───────── */
@@ -396,6 +397,7 @@ const ICONS = {
 function renderNav() {
   const items = [['record', '記錄相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料']];
   $('#nav').innerHTML = items.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${l}</button>`).join('');
+  if ($('#roleBtn')) $('#roleBtn').textContent = `角色：${C.ROLES[S.role]}`;
   $$('.band-nav [data-go]').forEach(b => { if (b.dataset.go === S.view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
   const tabs = [['home', '首頁'], ['record', '相遇'], ['survey', '觀察'], ['nearby', '附近'], ['data', '資料']];
   $('#tabbar').innerHTML = tabs.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[v]}</svg>${l}</button>`).join('');
@@ -1690,8 +1692,45 @@ function viewHowto() {
   </div></div>`;
 }
 
+/* ───────── 角色示範（#37） ───────── */
+function viewRoles() {
+  const R = C.ROLE, r = R.roles[S.role], T = C.TIERS[r.tier];
+  return `<div class="page pad">
+    <h1 style="font-size:clamp(30px,5cqi,40px)">${esc(R.title)}</h1>
+    <p class="lede">${esc(R.lede)}</p>
+    <div class="demo" role="group" aria-label="${esc(R.demo)}"><span class="note">${esc(R.demo)}</span>${Object.keys(R.roles).map(k => `<button type="button" id="role-${k}" data-act="role" data-v="${k}" ${pressed(S.role === k)}>${esc(C.ROLES[k])}</button>`).join('')}</div>
+    <section class="block" id="roleNow">
+      <h2 class="sec" id="roleHead">現在是「${esc(C.ROLES[S.role])}」</h2>
+      <p class="sec-lede">${esc(r.d)}</p>
+      <p class="small role-see">${esc(R.see)}<span class="tier-tag">${esc(T.name)}</span>${esc(T.see)}</p>
+      ${r.act ? `<div class="role-acts"><button type="button" class="btn primary" id="role-act" data-act="role-act">${esc(r.act)}</button></div>` : ''}
+    </section>
+    ${S.role === 'neighbor' ? gripeHTML() : ''}
+    ${tasksHTML()}
+  </div>`;
+}
+function gripeHTML() {
+  const G = C.ROLE.gripe, g = S.gripe;
+  return `<section class="block" id="gripeSec"><h2 class="sec">${esc(G.h)}</h2><p class="sec-lede">${esc(G.lede)}</p>
+    <div class="form-sec"><h3>${esc(G.kindLab)}</h3><div class="chips" role="group" aria-label="${esc(G.kindLab)}">${Object.entries(G.kinds).map(([k, x]) => `<button type="button" class="chip" id="gp-${k}" data-act="gripe-kind" data-v="${k}" ${pressed(g.kind === k)}>${esc(x.name)}</button>`).join('')}</div></div>
+    <div class="form-sec"><h3>${esc(G.placeLab)}<small>${esc(G.placeNote)}</small></h3><div class="chips" role="group" aria-label="${esc(G.placeLab)}">${G.places.map((p, i) => `<button type="button" class="chip" id="gpl-${i}" data-act="gripe-place" data-i="${i}" ${pressed(g.place === i)}>${esc(p)}</button>`).join('')}</div></div>
+    <p class="err" id="gripeErr" role="alert">${esc(S.gripeErr)}</p>
+    <div class="role-acts"><button type="button" class="btn primary" id="gripe-send" data-act="gripe-send">${esc(G.send)}</button></div>
+    <p class="note">${esc(G.no)}</p>
+  </section>`;
+}
+function tasksHTML() {
+  const R = C.ROLE;
+  if (!S.tasks.length) return '';
+  return `<section class="block" id="taskSec"><h2 class="sec">${esc(R.taskH)}</h2><p class="sec-lede">${esc(R.taskLede)}</p>
+    <ul class="tasks">${S.tasks.map(t => { const k = R.gripe.kinds[t.kind]; return `<li class="tier-row" id="task-${t.id}">
+      <p class="tier-lab"><b>${esc(t.place)}：${esc(k.name)}</b>${t.sample ? ' <span class="sample">示例</span>' : ''}${t.mine ? ' <span class="sample">你剛提出</span>' : ''}</p>
+      <p>${esc(k.task)}</p><p class="note">${esc(R.taskWho)}：${k.who.map(w => esc(C.ROLES[w])).join('、')}</p></li>`; }).join('')}</ul>
+  </section>`;
+}
+
 /* ───────── 主流程 ───────── */
-const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null], howto: [viewHowto, null] };
+const VIEWS = { home: [viewHome, null], record: [viewRecord, null], survey: [viewSurvey, null], nearby: [viewNearby, mountNearby], data: [viewData, mountData], admin: [viewAdmin, null], issues: [viewIssues, null], animal: [viewAnimal, null], dex: [viewDex, null], howto: [viewHowto, null], roles: [viewRoles, null] };
 function clearMaps() { Object.values(S.mapRefs).forEach(m => m?.destroy()); S.mapRefs = {}; }
 function render() {
   clearMaps();
@@ -1736,7 +1775,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub' });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', role: 'walker', gripe: { kind: null, place: null }, gripeErr: '', tasks: copy(C.ROLE.tasks) });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1820,6 +1859,26 @@ const ACT = {
   'ad-return'(t) { decide(t.dataset.id, '退回', null); },
   'card-off'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.off = !c.off; rerender(); },
   'card-extend'(t) { const c = S.cards.find(x => x.id === t.dataset.id); c.valid = '2027-06-30'; toast('已延長到 2027-06-30。下次填寫時會再浮現。'); rerender(); },
+  role(t) {
+    S.role = t.dataset.v; S.tier = C.ROLE.roles[S.role].tier; S.gripeErr = '';
+    rerender(); toast(`現在是「${C.ROLES[S.role]}」，用「${C.TIERS[S.tier].name}」的眼睛看。`);
+  },
+  'role-act'() {
+    const r = C.ROLE.roles[S.role];
+    if (r.aid) Object.assign(S, { aid: r.aid, diaryHits: null, nomText: '', adErr: false });
+    go(r.go);
+  },
+  'gripe-kind'(t) { S.gripe.kind = t.dataset.v; S.gripeErr = ''; rerender(); },
+  'gripe-place'(t) { S.gripe.place = +t.dataset.i; S.gripeErr = ''; rerender(); },
+  'gripe-send'() {
+    const g = S.gripe, G = C.ROLE.gripe;
+    if (!g.kind || g.place == null) { S.gripeErr = G.err; rerender(); return; }
+    const t = { id: 't' + (S.tasks.length + 1), kind: g.kind, place: G.places[g.place], mine: true };
+    S.tasks.unshift(t);
+    S.gripe = { kind: null, place: null }; S.gripeErr = '';
+    render(); $('#task-' + t.id)?.scrollIntoView({ block: 'nearest' });
+    toast(`已變成地區任務：${t.place}${G.kinds[t.kind].name}。`);
+  },
   animal(t) { S.aid = t.dataset.id; S.diaryHits = null; S.nomText = ''; S.adErr = false; go('animal'); },
   'nom-vote'(t) { const a = findAnimal(S.aid), n = a.noms[+t.dataset.i]; n[1]++; S.voted.push(a.id + n[0]); rerender(); toast(`已投給「${n[0]}」。`); },
   'nom-add'() {

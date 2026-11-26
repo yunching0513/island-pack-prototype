@@ -593,6 +593,10 @@ body[data-device="phone"] .app{border-radius:30px}
 .tier-row p{overflow-wrap:anywhere}
 .tier-row .note{display:block;margin-top:4px}
 .tier-lab{font-weight:700;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.tasks{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;gap:var(--s2)}
+.role-see{margin-top:var(--s2)}
+.role-acts{display:flex;flex-wrap:wrap;gap:var(--s2);margin-top:var(--s3)}
+#gripeErr:empty{display:none}
 .tier-tag{display:inline-block;font-size:12px;line-height:1.5;padding:0 8px;border:1px solid currentColor;border-radius:999px;font-weight:700;margin-inline:4px}
 .tier-why{margin-top:var(--s3)}
 .tier-why summary{min-height:44px;line-height:24px;padding:10px 0;cursor:pointer;font-weight:700;text-decoration:underline;text-underline-offset:4px}
@@ -707,6 +711,7 @@ dl.emg dt{font-weight:700}
       <nav class="band-nav" aria-label="團隊用畫面">
         <button type="button" class="band-btn" data-go="admin">管理後台</button>
         <button type="button" class="band-btn" data-go="issues">待決議題</button>
+        <button type="button" class="band-btn" id="roleBtn" data-go="roles">角色：散步者</button>
       </nav>
       <div class="seg" role="group" aria-label="預覽裝置">
         <button type="button" id="dev-auto" data-act="device" data-v="auto" aria-pressed="true">電腦</button>
