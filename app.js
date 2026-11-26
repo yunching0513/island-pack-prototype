@@ -346,7 +346,7 @@ function portraitOf(sp, f) {
     if (f.pattern === 'calico') return 'calico';
     if (f.coat === 'black') return 'blackCat';
     if (f.coat === 'orange') return 'tabby';
-    if (f.coat === 'white' && f.pattern === 'tabby') return 'kitten';
+    if (f.coat === 'white' && f.pattern === 'white-tabby') return 'kitten';
   }
   if (sp === 'dog') return {yellow:'gold',black:'blackDog',brown:'brownDog'}[f.coat];
   return null;
