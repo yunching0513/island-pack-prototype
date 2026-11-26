@@ -1,0 +1,41 @@
+name: Interface checks
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'app.js'
+      - 'content.js'
+      - 'miaoli.js'
+      - 'polish.css'
+      - 'assets/**'
+      - 'tests/**'
+      - 'tools/stamp.mjs'
+      - '.github/workflows/interface-checks.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript syntax
+        run: |
+          node --check app.js
+          node --check content.js
+          node --check miaoli.js
+      - name: Run existing interaction, contrast and responsive checks
+        env:
+          CHROME: /usr/bin/google-chrome
+        run: node tests/e2e.mjs --shots
+      - name: Keep mobile screenshots for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: interface-screenshots
+          path: tests/shots/
+          if-no-files-found: ignore

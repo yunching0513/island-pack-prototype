@@ -450,13 +450,51 @@ function goalHTML(x) {
 }
 function viewHome() {
   const H = C.HOME, h = H.home, b = H.back, st = homeStats(), J = C.JOURNEY;
-  return `<div class="page pad">
+  return `<div class="page pad home-page">
     ${tutSeen() ? '' : `<div class="tut-hint" id="tutHint"><p>${esc(C.TUTORIAL.first)}</p><div class="acts"><button type="button" class="btn sm" id="hint-go" data-go="howto">看怎麼玩</button><button type="button" class="btn quiet sm" id="hint-hide" data-act="tut-hide">不用了</button></div></div>`}
     <section class="hero">
-      <div>
-        <h1>讓牠們回家，讓牠們回來</h1>
-        <p class="lede">出門散步，看看附近的貓狗有沒有往回家的路前進，野生動物有沒有回來。每一隻動物的旅程由好幾個人一起完成，沒有人能一個人把牠帶走。</p>
-        <div class="cta"><button type="button" class="btn primary" data-go="record">記錄相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button><button type="button" class="btn quiet" id="home-howto" data-go="howto">怎麼玩</button></div>
+      <div class="welcome">
+        <div class="hero-copy">
+          <p class="eyebrow">巷仔口的日常・一起回家的旅程</p>
+          <h1>讓牠們回家，<br><span>讓牠們回來。</span></h1>
+          <p class="lede">出門散步，看看附近的貓狗有沒有往回家的路前進，野生動物有沒有回來。每一隻動物的旅程由好幾個人一起完成，沒有人能一個人把牠帶走。</p>
+          <div class="cta"><button type="button" class="btn primary" data-go="record">記錄相遇</button><button type="button" class="btn" data-go="nearby">看看附近</button><button type="button" class="btn quiet" id="home-howto" data-go="howto">怎麼玩</button></div>
+        </div>
+        <div class="neighborhood" aria-hidden="true">
+  <span class="scene-caption">每一次相遇，都是回家的起點。</span>
+  <svg class="street-art" viewBox="0 0 560 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="452" cy="62" r="28" fill="var(--sun)"/>
+    <path d="M22 103h54m-40-9h26M301 51h66m-52-10h31" stroke="var(--cloud)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M0 220h560v100H0z" fill="var(--scene-ground)"/>
+    <path d="M0 258h560M0 296h560" stroke="var(--scene-line)" stroke-width="2"/>
+    <path d="M237 220 177 320m156-100 61 100" stroke="var(--scene-line)" stroke-width="2"/>
+    <path d="M44 136h130v94H44z" fill="var(--house-a)"/>
+    <path d="M33 136v-17h17v-15h112v15h23v17H33Z" fill="var(--roof)"/>
+    <path d="M61 156h28v31H61zm68 0h28v31h-28z" fill="var(--window)"/>
+    <path d="M103 178h25v52h-25z" fill="var(--door)"/>
+    <path d="M98 230h38" stroke="var(--roof)" stroke-width="6"/>
+    <path d="M206 110h111v120H206z" fill="var(--house-b)"/>
+    <path d="M199 110V98h125v12" fill="var(--roof)"/>
+    <path d="M219 129h23v28h-23zm54 0h23v28h-23z" fill="var(--window)"/>
+    <path d="M220 182h81v48h-81z" fill="var(--door)"/>
+    <path d="M213 174h95v14h-95z" fill="var(--awning)"/>
+    <path d="M226 174v14m23-14v14m23-14v14m23-14v14" stroke="var(--house-b)" stroke-width="9"/>
+    <path d="M394 147h111v83H394z" fill="var(--house-a)"/>
+    <path d="M384 147v-13h19v-15h20v-15h54v15h19v15h19v13H384Z" fill="var(--roof)"/>
+    <path d="M414 169h26v27h-26z" fill="var(--window)"/>
+    <path d="M456 180h27v50h-27z" fill="var(--door)"/>
+    <path d="M352 129v108" stroke="var(--trunk)" stroke-width="12"/>
+    <path d="M314 128v-34h16V75h43v19h18v34h-17v17h-43v-17z" fill="var(--foliage)"/>
+    <path d="M320 118h40V86h-21v16h-19z" fill="var(--leaf-light)"/>
+    <path d="M27 221h20v20H27zm491-9h23v29h-23z" fill="var(--awning)"/>
+    <path d="M37 224v-25m491 18v-26" stroke="var(--foliage)" stroke-width="6"/>
+    <path d="m26 201 11 8 11-16m470 3 11 8 10-14" stroke="var(--leaf-light)" stroke-width="7"/>
+    <path d="M54 280h37m350-8h39" stroke="var(--scene-line)" stroke-width="3" stroke-linecap="round"/>
+  </svg>
+  <div class="scene-animal scene-dog">${spriteHTML(S.animals[0].sp, featOf(S.animals[0].f), null)}</div>
+  <div class="scene-animal scene-cat">${spriteHTML(S.animals[1].sp, featOf(S.animals[1].f), null)}</div>
+  <span class="scene-label">一起散步，一起守護</span>
+</div>
       </div>
       <section class="score" aria-labelledby="scoreArea">
         <p class="score-head"><b id="scoreArea">${esc(H.area)}</b><span>${esc(H.season)}</span><span class="sample">示例</span></p>
