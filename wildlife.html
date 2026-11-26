@@ -1,0 +1,63 @@
+<!doctype html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>臺灣野生動物・像素圖鑑提案｜巷仔口</title><style>
+:root{color-scheme:light;font-family:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei",sans-serif;color:#20372d;background:#f4f7f4}*{box-sizing:border-box}body{margin:0;line-height:1.8}a{color:#1b6349;text-underline-offset:4px}header,main,footer{max-width:1240px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;gap:16px;border-bottom:1px solid #d5dfd7}header a{font-weight:700}header nav{display:flex;gap:20px;flex-wrap:wrap}h1{font-size:clamp(30px,5vw,48px);line-height:1.3;margin:24px 0 16px;letter-spacing:-.04em}.lede{max-width:46em;color:#52665b}h2{font-size:24px;margin:36px 0 12px}.note{background:white;border:1px solid #d5dfd7;padding:16px 20px;border-radius:16px;font-size:15px;margin:24px 0}.filters{display:flex;gap:8px;flex-wrap:wrap;margin-block:24px}button{font:inherit;min-height:44px;padding:8px 18px;background:white;border:1px solid #d5dfd7;border-radius:999px;color:#20372d;cursor:pointer}button[aria-pressed=true]{background:#1b6349;color:white;border-color:#1b6349}.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px}.card{background:white;border:1px solid #d5dfd7;border-radius:20px;overflow:hidden;min-width:0}.art{display:block;width:100%;height:auto;aspect-ratio:1;background-repeat:no-repeat;background-size:300% 200%;background-color:#e8efe9;image-rendering:pixelated}.info{padding:20px}.info h2{margin:0 0 4px;font-size:22px}.latin{font-size:13px;color:#52665b;font-style:italic;overflow-wrap:anywhere}.badge{display:inline-block;font-size:12px;padding:3px 9px;background:#e5efe4;border-radius:99px;margin-block:10px}.badge.extended{background:#f8e7da;color:#88482e}.info p{font-size:15px;margin:8px 0}.info a{font-size:14px;display:inline-flex;align-items:center;min-height:44px}footer{font-size:13px;color:#52665b}#count{color:#52665b;font-size:15px}:focus-visible{outline:3px solid #1b6349;outline-offset:3px}@media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:520px){header,main,footer{padding:18px}.grid{grid-template-columns:minmax(0,1fr)}.art{aspect-ratio:1}.info{padding:18px}header{flex-direction:column}}
+</style></head><body><header><a href="index.html">巷仔口・一起回家</a><nav><a href="motion.html">貓狗動作試玩</a><a href="index.html#record">記錄相遇</a></nav></header><main><h1>城市之外，也在你身邊。</h1><p class="lede">臺灣野生動物的像素造型提案。圓潤、大眼睛，仍保留物種的關鍵輪廓與花紋。這一頁提供設計比較與辨識參考，不代表臺北市各里的實際出沒紀錄。</p><div class="note"><b>以臺北市為首波，物種不一律套用貓狗玩法。</b>野生動物以遠距觀察、自然覓食、警戒與移動為設計方向；不設「餵食野生動物」操作。敏感物種位置僅公開到行政區。石虎保留作全臺擴充候選，不宣稱臺北市有野外紀錄。</div><div class="filters" role="group" aria-label="候選物種篩選"><button data-filter="all" aria-pressed="true">全部 12 種</button><button data-filter="requested" aria-pressed="false">你指定的 6 種</button><button data-filter="additional" aria-pressed="false">新增候選 6 種</button><button data-filter="taipei" aria-pressed="false">臺北首波候選</button></div><p id="count" role="status"></p><section class="grid" id="grid" aria-label="野生動物造型"></section><h2>使用這些圖之前</h2><p class="lede">目前為原創生成式像素概念稿，尚未完成逐像素校準與野保專家審閱。動物外型、年齡、性別與季節羽色可能不同；不要用單一插畫代替現場鑑種。來源連結用於查核辨識特徵與地區適用性，圖稿不是來源網站的照片或官方圖鑑。</p></main><footer>資料查詢日期：2026-11-26。參考臺北市立動物園、臺北市生物多樣性資料庫、陽明山國家公園、農業部及國家公園主題網。里界與動物紀錄是不同資料層；不把示例統計視為分布證據。</footer><script>
+const zoo='https://www.zoo.gov.taipei/News_Content.aspx?n=CC7DF0D6519201FD&sms=D5A439C2736D52BF&s=';
+const animals=[
+{name:'白鼻心',latin:'Paguma larvata',set:'a',i:0,type:'requested',local:true,look:'額頭到鼻端的白線、黑色面罩、灰褐色身體與長尾。',motion:'慢走、嗅聞、爬行與回頭觀望。',url:zoo+'EBE8B214FF7BBFEE'},
+{name:'穿山甲',latin:'Manis pentadactyla',set:'a',i:1,type:'requested',local:true,look:'重疊鱗片、尖長吻部、強壯前爪與逐漸變細的長尾。',motion:'緩步、挖掘、嗅聞；警戒時蜷曲。',url:'https://www.zoo.gov.tw/2025Rightwherelivesbelong/Endangered_Animals.html'},
+{name:'石虎',latin:'Prionailurus bengalensis',set:'a',i:2,type:'requested',local:false,look:'額頭兩道淡色縱帶、耳背白斑、身體深色斑點。',motion:'潛行、警戒、回頭；保留為全臺擴充。',url:zoo+'327A85C2DDFE5057'},
+{name:'眼鏡蛇',latin:'Naja atra',set:'a',i:3,type:'requested',local:true,look:'細長蛇身、可擴展的頸部；圖稿呈現頸部輪廓。',motion:'自然滑行與吐信；警戒僅作辨識動畫，不鼓勵靠近。',url:'https://www.ymsnp.gov.tw/ch/florafauna/amphibians-and-reptiles/401'},
+{name:'麻雀',latin:'Passer montanus',set:'a',i:4,type:'requested',local:true,look:'栗色頭頂、白頰黑斑、黑色喉斑與短錐形鳥嘴。',motion:'跳步、啄食自然食物、抖羽與短距離飛行。',url:'https://www.zoo.gov.tw/2025Rightwherelivesbelong/Native_Species.html'},
+{name:'鳳頭蒼鷹',latin:'Crested Goshawk',set:'a',i:5,type:'requested',local:true,look:'短冠羽、黃橙色眼睛、鉤嘴、橫紋腹部與有帶紋的尾羽。',motion:'轉頭觀察、理羽、展翅與停棲。',url:'https://www.ymsnp.gov.tw/ch/florafauna/birds/378'},
+{name:'黑冠麻鷺',latin:'Gorsachius melanolophus',set:'b',i:0,type:'additional',local:true,look:'黑色頭頂與冠羽、栗褐色身體、較長的腿。',motion:'慢步、定住、伸頸觀察。',url:'https://kmweb.moa.gov.tw/theme_data.php?id=138&theme=bird_illustration'},
+{name:'赤腹松鼠',latin:'Callosciurus erythraeus',set:'b',i:1,type:'additional',local:true,look:'灰褐色背部、紅褐色腹部與蓬鬆長尾。',motion:'跳躍、抱食自然食物、尾巴擺動。',url:'https://biodiv.gov.taipei/page/additional/show.aspx?num=916&page=116'},
+{name:'臺灣藍鵲',latin:'Urocissa caerulea',set:'b',i:2,type:'additional',local:true,look:'黑色頭頸、藍色身體、紅嘴紅腳與末端帶白的長尾。',motion:'跳步、回頭、展翅與甩尾。',url:'https://www.taiwan.nps.gov.tw/home/zh-tw/eco-gallery/21330.html'},
+{name:'鼬獾',latin:'Melogale moschata',set:'b',i:3,type:'additional',local:true,look:'粉紅尖鼻、圓耳、黃白色臉頰與不連續的額部白斑。',motion:'低身慢走、嗅聞與挖掘。',url:zoo+'12C997F9B894F08C'},
+{name:'食蟹獴',latin:'Urva urva',set:'b',i:4,type:'additional',local:true,look:'細長吻部、灰棕色粗毛、從嘴角到頸側的白色條帶。',motion:'沿地面嗅聞、走動與警戒回望。',url:'https://biodiv.gov.taipei/page/additional/show.aspx?num=933&page=118'},
+{name:'山羌',latin:'Muntiacus reevesi',set:'b',i:5,type:'additional',local:true,look:'小型鹿科、棕褐色身體、額頭深色花紋；雄性有短角。',motion:'小步行走、豎耳、回頭與跳開。',url:zoo+'D1FBB99533192CD5'}
+];
+
+// Generated sheets have irregular gutters. Isolate their six opaque connected
+// silhouettes at runtime instead of cutting tails and noses at equal grid lines.
+const sprites = {};
+async function prepareSheet(key) {
+  const img = new Image();
+  await new Promise((ok,no)=>{img.onload=ok;img.onerror=no;img.src='assets/wildlife-concepts-'+key+'.png';});
+  const cv=document.createElement('canvas');cv.width=img.width;cv.height=img.height;
+  const cx=cv.getContext('2d',{willReadFrequently:true});cx.drawImage(img,0,0);
+  const data=cx.getImageData(0,0,cv.width,cv.height),W=cv.width,H=cv.height;
+  const labels=new Int32Array(W*H),queue=new Int32Array(W*H),found=[];let label=0;
+  for(let i=0;i<W*H;i++){
+    if(labels[i]||data.data[i*4+3]<180)continue;
+    label++;let front=0,back=1;queue[0]=i;labels[i]=label;
+    let x0=W,y0=H,x1=0,y1=0,count=0;
+    while(front<back){
+      const q=queue[front++],x=q%W,y=Math.floor(q/W);count++;
+      x0=Math.min(x0,x);y0=Math.min(y0,y);x1=Math.max(x1,x);y1=Math.max(y1,y);
+      for(const n of [x>0?q-1:-1,x<W-1?q+1:-1,y>0?q-W:-1,y<H-1?q+W:-1])
+        if(n>=0&&!labels[n]&&data.data[n*4+3]>=180){labels[n]=label;queue[back++]=n;}
+    }
+    if(count>5000)found.push({label,x0,y0,x1,y1});
+  }
+  for(const b of found){
+    const tile=Math.min(2,Math.floor((b.x0+b.x1)/2/(W/3)))+3*Math.min(1,Math.floor((b.y0+b.y1)/2/(H/2)));
+    const cut=document.createElement('canvas');cut.width=b.x1-b.x0+1;cut.height=b.y1-b.y0+1;
+    const tx=cut.getContext('2d'),out=tx.createImageData(cut.width,cut.height);
+    for(let y=0;y<cut.height;y++)for(let x=0;x<cut.width;x++){
+      const q=(b.y0+y)*W+b.x0+x;if(labels[q]===b.label)out.data.set(data.data.subarray(q*4,q*4+4),(y*cut.width+x)*4);
+    }
+    tx.putImageData(out,0,0);sprites[key+tile]=cut;
+  }
+  paintSprites();
+}
+function paintSprites(){document.querySelectorAll('canvas[data-sheet]').forEach(cv=>{
+  const sprite=sprites[cv.dataset.sheet+cv.dataset.index];if(!sprite)return;
+  const ctx=cv.getContext('2d');ctx.clearRect(0,0,512,512);ctx.imageSmoothingEnabled=false;
+  const scale=440/Math.max(sprite.width,sprite.height),w=sprite.width*scale,h=sprite.height*scale;
+  ctx.drawImage(sprite,Math.round((512-w)/2),Math.round((512-h)/2),Math.round(w),Math.round(h));
+});}
+Promise.all(['a','b'].map(prepareSheet)).catch(()=>{document.getElementById('count').textContent+='（圖稿未能載入，請重新整理）';});
+
+function render(filter){const list=animals.filter(a=>filter==='all'||filter===a.type||filter==='taipei'&&a.local);document.getElementById('count').textContent='目前顯示 '+list.length+' 種造型提案';document.getElementById('grid').innerHTML=list.map(a=>'<article class="card"><canvas class="art" width="512" height="512" role="img" aria-label="'+a.name+'的像素造型概念圖" data-sheet="'+a.set+'" data-index="'+a.i+'"></canvas><div class="info"><h2>'+a.name+'</h2><p class="latin">'+a.latin+'</p><span class="badge '+(a.local?'':'extended')+'">'+(a.local?'臺北首波候選':'全臺擴充候選')+'</span><p><b>辨識重點</b> '+a.look+'</p><p><b>動作方向</b> '+a.motion+'</p><a href="'+a.url+'" target="_blank" rel="noopener noreferrer">查看參考資料</a></div></article>').join('');paintSprites();}
+document.querySelectorAll('[data-filter]').forEach(b=>b.onclick=()=>{document.querySelectorAll('[data-filter]').forEach(x=>x.setAttribute('aria-pressed',x===b));render(b.dataset.filter);});render('all');
+</script></body></html>

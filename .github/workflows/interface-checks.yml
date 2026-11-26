@@ -6,6 +6,10 @@ on:
       - 'app.js'
       - 'content.js'
       - 'miaoli.js'
+      - 'taipei.js'
+      - 'motion.html'
+      - 'pet-motion.js'
+      - 'wildlife.html'
       - 'polish.css'
       - 'assets/**'
       - 'tests/**'
@@ -27,7 +31,8 @@ jobs:
         run: |
           node --check app.js
           node --check content.js
-          node --check miaoli.js
+          node --check taipei.js
+          node --check pet-motion.js
       - name: Run existing interaction, contrast and responsive checks
         env:
           CHROME: /usr/bin/google-chrome

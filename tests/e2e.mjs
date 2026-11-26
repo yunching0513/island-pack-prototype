@@ -140,7 +140,7 @@ async function tiers() {
   const a1 = { range: '車站前後', health: '體重回升', care: '2 個餵食點', diary: '尾巴那個彎' };
   await check('預設是公開：看得到地標一帶，看不到範圍、健康、餵食點與日記', async () => {
     const t = await text('#view');
-    return t.includes('銅鑼鄉・車站一帶') && !t.includes(a1.range) && !t.includes(a1.health) && !t.includes(a1.care) && !t.includes(a1.diary) && await has('#diaryLock') && !(await has('#diaryIn'));
+    return t.includes('大安區・學府里・車站一帶') && !t.includes(a1.range) && !t.includes(a1.health) && !t.includes(a1.care) && !t.includes(a1.diary) && await has('#diaryLock') && !(await has('#diaryIn'));
   });
   await check('切到小隊：多了大致範圍、健康與日記，餵食點仍鎖著', async () => {
     await click('#tier-squad'); const t = await text('#view');
@@ -191,7 +191,7 @@ async function wildlife() {
     await click('#next-1');
     const pub = await text('.pv:not(.raw)');
     await shot('wild-1-publish');
-    return pub.includes('敏感物種只到鄉鎮') && pub.includes('延後 30 天') && !pub.includes('銅鑼村') && pub.includes('聽見 1 隻');
+    return pub.includes('敏感物種只到行政區') && pub.includes('延後 30 天') && !pub.includes('學府里') && pub.includes('聽見 1 隻');
   });
   await check('第一次記錄到這一種，解鎖物種卡並標示「示例，待專家撰寫」', async () => {
     await click('#submit');
@@ -203,7 +203,7 @@ async function wildlife() {
     return t.includes('次散步中，有') && t.includes('不是牠的數量') && !/族群|約\s*[0-9０-９]+\s*隻|估計/.test(t);
   });
   await check('同一種再記一次不會重複解鎖', async () => { await wildRecord('light-vented-bulbul'); await click('#submit'); return (await text('#dexHead')) === '這一種你記錄過了'; });
-  await check('一般物種的公開版本到村里', async () => { await wildRecord('night-heron'); const ok = (await text('.pv:not(.raw)')).includes('銅鑼鄉銅鑼村'); await click('#submit'); return ok; });
+  await check('一般物種的公開版本到里', async () => { await wildRecord('night-heron'); const ok = (await text('.pv:not(.raw)')).includes('大安區學府里'); await click('#submit'); return ok; });
   await check('只認出類群：算進「回來」，不解鎖物種卡', async () => {
     await wildRecord('group-bird'); await click('#submit');
     return !(await has('.sp-card')) && (await text('#view')).includes('認出是哪一種，就能解鎖');
@@ -335,6 +335,48 @@ async function contrast() {
   }
 }
 
+async function taipeiAndMotion() {
+  console.log('臺北市：行政區與里');
+  await size(375); await open('home');
+  await check('圖資是臺北市 12 行政區、456 里，里代碼不重複', async () => js(`window.TAIPEI.towns.length === 12 && window.TAIPEI.villages.length === 456 && new Set(window.TAIPEI.villages.map(v => v.c)).size === 456`));
+  await check('首頁已移除苗栗，新增角色動作與野生動物入口', async () => !(await text('#view')).includes('苗栗') && await has('a[href="motion.html"]') && await has('a[href="wildlife.html"]'));
+  await open('nearby'); await click('#nbToggle');
+  await check('選行政區後可選里，切換行政區時重設里篩選', async () => {
+    await js(`(() => {const e=document.getElementById('nb-town');e.value='大安區';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const code=await js(`window.TAIPEI.villages.find(v=>v.t==='大安區'&&v.v==='學府里').c`);
+    await js(`(() => {const e=document.getElementById('nb-vill');e.value=${JSON.stringify(code)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    const selected=(await text('#nbArea')).includes('大安區學府里');
+    await js(`(() => {const e=document.getElementById('nb-town');e.value='文山區';e.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+    return selected && (await js(`document.getElementById('nb-vill').value`))==='all';
+  });
+  const visit=async file=>{const loaded=once('Page.loadEventFired');await send('Page.navigate',{url:PAGE.replace('index.html',file)});await loaded;await sleep(600);};
+  console.log('貓狗動作試玩');
+  await visit('motion.html');
+  await check('四位伙伴、八種動作與八個對照動畫載入', async () => (await js(`document.querySelectorAll('[data-pet]').length`))===4 && (await js(`document.querySelectorAll('[data-action]').length`))===8 && (await js(`document.querySelectorAll('.mini canvas').length`))===8);
+  await check('四位伙伴皆可切換八種動作，畫布不是空白', async () => {
+    for(const pet of ['gold','black','tabby','calico']) {
+      await click(`[data-pet="${pet}"]`);
+      for(const action of ['idle','run','eat','drink','happy','sad','angry','love']){
+        await click(`[data-action="${action}"]`);
+        if(!(await js(`document.getElementById('mainCanvas').getAttribute('aria-label').includes(document.querySelector('[data-action="${action}"]').textContent.trim())`)))return false;
+      }
+    }
+    return (await js(`document.getElementById('mainCanvas').toDataURL().length`))>3000;
+  });
+  await check('暫停與播放控制可切換', async () => {await click('#pause');const stopped=(await text('#pause'))==='播放';await click('#pause');return stopped && (await text('#pause'))==='暫停';});
+  for(const w of [1360,375,320]){await size(w);await check(`動作頁 ${w}px 沒有橫向溢出`,async()=>await overflow()===0);}
+  console.log('野生動物造型候選');
+  await visit('wildlife.html');
+  await check('12 種候選有來源，指定與新增清單各 6 種',async()=>{
+    const all=await js(`document.querySelectorAll('.card').length===12 && [...document.querySelectorAll('.card a')].every(a=>a.href.startsWith('https://'))`);
+    await click('[data-filter="requested"]');const requested=await js(`document.querySelectorAll('.card').length===6`);
+    await click('[data-filter="additional"]');const additional=await js(`document.querySelectorAll('.card').length===6`);
+    await click('[data-filter="taipei"]');const taipei=await js(`document.querySelectorAll('.card').length===11 && ![...document.querySelectorAll('.card h2')].some(e=>e.textContent==='石虎')`);
+    return all && requested && additional && taipei;
+  });
+  for(const w of [1360,375,320]){await size(w);await check(`野生動物頁 ${w}px 沒有橫向溢出`,async()=>await overflow()===0);}
+}
+
 try {
   console.log('版本號');
   await check('index.html 的 <script> 版本號是最新的（沒有的話執行 node tools/stamp.mjs）', () => readIndex() === stamped(readIndex()));
@@ -346,6 +388,7 @@ try {
   await targets();
   await contrast();
   await layout();
+  await taipeiAndMotion();
   await check('主控台沒有錯誤', () => { const p = problems.filter(x => !/favicon|ERR_FILE_NOT_FOUND|fonts\.g/.test(x)); if (p.length) throw new Error(p.slice(0, 3).join(' / ')); });
 } catch (e) { fail++; console.log(`✗ 測試中斷：${e.message}`); }
 finally { cleanup(); }
