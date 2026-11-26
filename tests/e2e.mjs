@@ -444,12 +444,12 @@ async function taipeiAndMotion() {
     }
     return true;
   })()`));
-  await check('吃飯、喝水、開心、生氣皆使用專用重繪圖稿，與站姿不同', async () => js(`(() => {
+  await check('吃飯、喝水、開心、生氣、難過皆使用專用重繪圖稿，與站姿不同', async () => js(`(() => {
     const cv=document.createElement('canvas');cv.width=640;cv.height=400;
     const anim=new PixelPals.Animator(cv);anim.destroy();
     for(const pet of PixelPals.PETS){
       anim.set(pet.id,'idle');anim.render(0);const idle=anim.pose.canvas.toDataURL();
-      for(const action of ['eat','drink','happy','angry']){
+      for(const action of ['eat','drink','happy','angry','sad']){
         anim.set(pet.id,action);anim.render(0);
         if(anim.pose.variant!==action||anim.pose.canvas.toDataURL()===idle)return false;
       }
@@ -465,6 +465,24 @@ async function taipeiAndMotion() {
     await click('[data-filter="additional"]');const additional=await js(`document.querySelectorAll('.card').length===6`);
     await click('[data-filter="taipei"]');const taipei=await js(`document.querySelectorAll('.card').length===11 && ![...document.querySelectorAll('.card h2')].some(e=>e.textContent==='石虎')`);
     return all && requested && additional && taipei;
+  });
+  await check('12 種野生動物的原造型與三種表情完整載入，切換後圖像確實不同',async()=>{
+    await click('[data-filter="all"]');
+    const variants=[];
+    for(const mood of ['neutral','happy','angry','sad']){
+      await click('[data-mood="'+mood+'"]');
+      for(let i=0;i<80;i++){
+        if(await js(`document.querySelectorAll('canvas[data-loaded="true"]').length===12`))break;
+        await sleep(100);
+      }
+      const result=await js(`(() => {const all=[...document.querySelectorAll('canvas.art')];return {ok:all.length===12&&all.every(cv=>cv.dataset.loaded==='true'&&cv.dataset.emotion===${JSON.stringify(mood)}&&cv.toDataURL().length>4000),images:all.map(cv=>cv.toDataURL())};})()`);
+      if(!result.ok)return false;variants.push(result.images);
+    }
+    return Array.from({length:12},(_,i)=>new Set(variants.map(v=>v[i])).size===4).every(Boolean);
+  });
+  await check('物種篩選保留所選表情，表情圖示有正確替代文字',async()=>{
+    await click('[data-filter="additional"]');
+    return await js(`document.querySelectorAll('canvas.art').length===6&&[...document.querySelectorAll('canvas.art')].every(c=>c.dataset.emotion==='sad'&&c.dataset.loaded==='true'&&c.getAttribute('aria-label').includes('難過'))`);
   });
   for(const w of [1360,375,320]){await size(w);await check(`野生動物頁 ${w}px 沒有橫向溢出`,async()=>await overflow()===0);}
 }
