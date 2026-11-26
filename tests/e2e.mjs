@@ -437,6 +437,18 @@ try {
   console.log('版本號');
   await check('index.html 的 <script> 版本號是最新的（沒有的話執行 node tools/stamp.mjs）', () => readIndex() === stamped(readIndex()));
   await connect();
+  await open('home');
+  await check('首頁街景使用新版橘貓與黑貓，且圖像載入完整', async () => {
+    await sleep(1000);
+    return await js(`(() => {const pets=[...document.querySelectorAll('.scene-animal img')];return pets.length===2 && pets.map(p=>p.dataset.portrait).join(',')==='tabby,blackCat' && pets.every(p=>p.complete && p.naturalWidth===112 && p.src.startsWith('data:image/png'));})()`);
+  });
+  await check('五張示例個體卡依物種與毛色套用新版角色', async () => {
+    for (const [id, portrait] of [['a1','tabby'],['a2','blackCat'],['a3','gold'],['a4','kitten'],['a5','brownDog']]) {
+      await open('home'); await animal(id); await sleep(350);
+      if (!(await js(`(() => {const p=document.querySelector('.a-head img');return p && p.dataset.portrait===${JSON.stringify(portrait)} && p.complete && p.naturalWidth===112;})()`))) return false;
+    }
+    return true;
+  });
   await journey();
   await tiers();
   await wildlife();

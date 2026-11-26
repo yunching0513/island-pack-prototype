@@ -83,9 +83,9 @@ input[type=text],input[type=datetime-local],textarea,select {background:var(--su
 .scene-caption {position:absolute;top:24px;left:24px;right:20px;font-size:14px;color:var(--ink);z-index:1}
 .street-art {position:absolute;bottom:0;left:0;width:100%;height:auto;display:block}
 .scene-label {position:absolute;bottom:12px;right:16px;color:var(--ink);font-size:13px}
-.scene-animal {position:absolute;width:18%;bottom:11%;line-height:0}
-.scene-dog {left:29%;transform:scaleX(-1)}
-.scene-cat {left:61%;bottom:17%;width:15%}
+.scene-animal {position:absolute;width:23%;bottom:10%;line-height:0}
+.scene-dog {left:27%;transform:scaleX(-1)}
+.scene-cat {left:61%;bottom:16%;width:20%}
 .scene-animal .px {width:100%;height:auto;aspect-ratio:1;padding:0;background:transparent;border-radius:0;box-sizing:border-box}
 .tut-hint {background:var(--paper);border:1px solid var(--rule2);padding:12px 16px;margin-bottom:28px;gap:8px 16px}
 .tut-hint p {font-size:15px;font-weight:400}
