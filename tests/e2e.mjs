@@ -268,7 +268,9 @@ async function layout() {
     await size(w, dark);
     const bad = [];
     for (const v of views) { await open(v); const o = await overflow(); if (o > 0) bad.push(`${v}(${o}px)`); }
-    await open('home'); await animal('a3');
+    await open('home');
+    await shot(`home-${w}-${dark ? 'dark' : 'light'}`);
+    await animal('a3');
     for (const step of [null, 'apply-ready', 'prep', 'home']) {
       if (step === 'apply-ready') { for (const k of ['indoor', 'family', 'vet']) await click(`#aq-${k}-yes`); await click('#ad-apply'); await click('#ad-confirm'); }
       if (step === 'home') { for (const k of ['plan', 'net', 'vet', 'chip', 'kit']) await click(`#ac-${k}`); await click('#ad-go'); }
