@@ -6,8 +6,8 @@
 
 | 素材 | 來源 | 授權 |
 | --- | --- | --- |
-| 苗栗縣村里界 | 內政部，經 [taiwan-atlas](https://github.com/dkaoster/taiwan-atlas) 2021.9.20 版轉為 TopoJSON | 政府資料開放授權條款第 1 版；taiwan-atlas 為 MIT |
-| 主要道路 | © OpenStreetMap 貢獻者，2026-11-07 由 Overpass API 取得 | ODbL 1.0 |
+| 舊版苗栗縣村里界（目前不載入） | 內政部，經 [taiwan-atlas](https://github.com/dkaoster/taiwan-atlas) 2021.9.20 版轉為 TopoJSON | 政府資料開放授權條款第 1 版；taiwan-atlas 為 MIT |
+| 舊版主要道路（目前不載入） | © OpenStreetMap 貢獻者，2026-11-07 由 Overpass API 取得 | ODbL 1.0 |
 | 字體 Huninn（jf 粉圓體） | Google Fonts | SIL Open Font License 1.1 |
 
 ## 示例內容
@@ -16,3 +16,17 @@
 - 組織、故事與後台項目都是虛構示例。
 - 安全提示文字尚未經專業查核，不可直接使用。
 - 引用的政策與研究來源，以構想文件的參考資料為準。
+
+## 臺北市里界
+
+- 臺北市政府民政局：[臺北市里界圖](https://data.taipei/dataset/detail?id=6b17b31d-4e16-495e-95b1-9fd1f47c80d8)，檔案更新 2026-09-21，頁面記載資料收錄迄 2025-06-17，下載日期 2026-11-26。
+- 授權：政府資料開放授權條款第 1 版。來源 SHP 為 TWD97/TM2（EPSG:3826）；以 3 公尺容差簡化、轉為 WGS84，再投影到本原型的 10 公尺座標單位；含 12 行政區、456 里。
+- 產製工具：`python3 tools/build_taipei.py`；依賴 requests、pyshp、pyproj、shapely。本版不含道路底圖。圖形經簡化，不能作為地籍或界址認定。
+
+## 本次角色圖稿
+
+- `assets/pixel-pals-atlas.png`：使用者選定的生成式大眼像素貓狗稿；四位角色的去背版。`pet-motion.js` 以分層骨架變換呈現動作，不改動原圖。
+- `assets/wildlife-concepts-a.png`、`assets/wildlife-concepts-b.png`：本次原創生成式像素概念稿，參照使用者提供的外型照片與官方物種介紹；不是官方鑑種插畫。公開的圖稿不含來源照片或其商標。
+- 傳統 48×48 特徵零件仍由 `tools/make_placeholders.py` 產生。兩套圖稿用途不同：前者為造型與動作試玩，後者支援紀錄表單的毛色與特徵組合。
+- 野生動物各卡片附辨識資料來源：臺北市立動物園、臺北市生物多樣性資料庫、陽明山國家公園、農業部與臺灣國家公園主題網。查詢日期 2026-11-26。來源引用不等於提供者對圖稿或遊戲的背書。
+- 野生動物尚未經專家審閱。候選名單及遊戲表情不能用來推定現場物種、行為、保育等級或里尺度分布。

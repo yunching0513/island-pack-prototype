@@ -80,32 +80,32 @@ def img_from(colors):
 # ───────── 身體幾何（成年座標） ─────────
 GEO = {
     'cat': dict(
-        body=((9, 21), (35, 35)), head=((29, 9), (44, 24)), hc=(36.5, 16.5),
-        muzzle=((37, 16), (44, 23)),
-        ear_far=[(30, 13), (32, 4), (36, 11)], ear_near=[(35, 11), (40, 3), (43, 13)],
-        legs_far=[((13, 31), (16, FOOT)), ((28, 31), (31, FOOT))],
-        legs_near=[((17, 31), (20, FOOT)), ((32, 31), (35, FOOT))],
-        belly_y=31, eye=(39, 14), nose=(44, 18), nose_c=(0xd9, 0x8a, 0x94),
+        body=((8, 24), (35, 38)), head=((24, 10), (44, 31)), hc=(34, 20.5),
+        muzzle=((37, 23), (44, 30)),
+        ear_far=[(25, 15), (27, 3), (34, 12)], ear_near=[(35, 12), (40, 2), (44, 16)],
+        legs_far=[((12, 34), (16, FOOT)), ((27, 34), (31, FOOT))],
+        legs_near=[((17, 34), (21, FOOT)), ((32, 34), (36, FOOT))],
+        belly_y=34, eye=(38, 20), nose=(44, 25), nose_c=(0xd9, 0x8a, 0x94),
         tails={
-            'normal': [(10, 27), (5, 21), (5, 12)],
-            'short': [(10, 26), (7, 24)],
-            'kinked': [(10, 27), (5, 20), (6, 14), (10, 12)],
+            'normal': [(10, 29), (5, 23), (5, 14)],
+            'short': [(10, 29), (6, 27)],
+            'kinked': [(10, 29), (4, 23), (5, 17), (9, 15)],
         },
-        bulge=((14, 28), (30, 38)),
+        bulge=((13, 31), (31, 41)),
     ),
     'dog': dict(
-        body=((8, 19), (34, 32)), head=((28, 8), (41, 21)), hc=(34.5, 14.5),
-        snout=((38, 13), (45, 20)), muzzle=((38, 15), (45, 20)),
-        ear_far=[(29, 11), (31, 2), (35, 9)], ear_near=[(34, 9), (38, 1), (41, 10)],
-        legs_far=[((11, 29), (14, FOOT)), ((27, 29), (30, FOOT))],
-        legs_near=[((15, 29), (18, FOOT)), ((31, 29), (34, FOOT))],
-        belly_y=28, eye=(37, 12), nose=(45, 15), nose_c=OL,
+        body=((7, 24), (34, 38)), head=((23, 10), (43, 31)), hc=(33, 20.5),
+        snout=((38, 22), (46, 29)), muzzle=((38, 23), (46, 29)),
+        ear_far=[(24, 15), (26, 3), (33, 12)], ear_near=[(34, 12), (39, 2), (44, 16)],
+        legs_far=[((10, 34), (14, FOOT)), ((26, 34), (30, FOOT))],
+        legs_near=[((15, 34), (19, FOOT)), ((31, 34), (35, FOOT))],
+        belly_y=34, eye=(38, 20), nose=(46, 24), nose_c=OL,
         tails={
-            'curled': [(9, 23), (5, 16), (8, 10), (13, 12)],
-            'drooped': [(9, 24), (5, 30), (4, 37)],
-            'short': [(9, 23), (6, 21)],
+            'curled': [(9, 29), (5, 22), (8, 15), (14, 17)],
+            'drooped': [(9, 30), (5, 35), (4, 40)],
+            'short': [(9, 29), (5, 27)],
         },
-        bulge=((13, 26), (29, 36)),
+        bulge=((12, 31), (30, 41)),
     ),
 }
 
@@ -205,13 +205,34 @@ def tail_img(sp, age, kind):
 
 
 def face_img(sp, age):
+    """大眼、雙高光與短嘴；固定色的表情最後疊，不會被毛色或花紋蓋住。"""
     g = GEO[sp]
     th = tf(age, True, g['hc'])
-    ex, ey = (round(v) for v in th(*g['eye']))
+    im = Image.new('RGBA', (W, W), CLEAR)
+    d = ImageDraw.Draw(im)
+
+    def box(bounds):
+        x0, y0 = th(*bounds[:2])
+        x1, y1 = th(*bounds[2:])
+        return tuple(round(v) for v in (x0, y0, x1, y1))
+
+    cream, iris, shine = (255, 246, 229), (83, 58, 47), (255, 255, 251)
+    # 身體朝右，臉稍微轉向觀者：遠側眼小一點，近側眼有兩個高光。
+    for bounds in ((27, 16, 32, 23), (35, 15, 42, 25)):
+        x0, y0, x1, y1 = box(bounds)
+        d.ellipse((x0, y0, x1, y1), fill=(*OL, 255))
+        d.ellipse((x0 + 1, y0 + 1, x1 - 1, y1 - 1), fill=(*cream, 255))
+        d.ellipse((x0 + 1, y0 + 1, x1 - 1, y1 - 2), fill=(*iris, 255))
+        d.ellipse((x0 + 2, y0 + 1, x1 - 1, y1 - 3), fill=(*OL, 255))
+        d.rectangle((x0 + 1, y0 + 1, x0 + 2, y0 + 2), fill=(*shine, 255))
+        d.point((x1 - 2, y1 - 3), fill=(*shine, 255))
     nx, ny = (round(v) for v in th(*g['nose']))
-    col = {(ex, ey): OL, (ex + 1, ey): OL, (ex, ey + 1): OL, (ex + 1, ey + 1): OL, (ex, ey): (250, 250, 245)}
-    col[(nx - 1, ny)] = g['nose_c']
-    return img_from(col)
+    d.line([(nx - 2, ny), (nx - 1, ny)], fill=(*g['nose_c'], 255), width=1)
+    mx, my = (round(v) for v in th(42, 28))
+    d.line([(mx - 2, my), (mx - 1, my + 1), (mx, my)], fill=(*OL, 255), width=1)
+    bx, by = (round(v) for v in th(33, 26))
+    d.line([(bx - 1, by), (bx, by)], fill=(225, 151, 146, 255), width=1)
+    return im
 
 
 # ───────── 花紋（固定顏色） ─────────
