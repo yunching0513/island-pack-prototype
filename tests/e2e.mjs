@@ -437,7 +437,22 @@ async function taipeiAndMotion() {
         parts.push(count);
       }
       parts.sort((a,b)=>b-a);
-      if(!parts.length||parts[0]<4000||parts.slice(1).some(n=>n>25))return false;
+      const feeding=action.id==='eat'||action.id==='drink';
+      // Illustrated bowls may be separate from the animal; a detached head or
+      // leg is still much larger than the permitted small bowl component.
+      if(!parts.length||parts[0]<(feeding?3000:4000)||parts.slice(1).some(n=>n>(feeding?650:25)))return false;
+    }
+    return true;
+  })()`));
+  await check('吃飯、喝水、開心、生氣皆使用專用重繪圖稿，與站姿不同', async () => js(`(() => {
+    const cv=document.createElement('canvas');cv.width=640;cv.height=400;
+    const anim=new PixelPals.Animator(cv);anim.destroy();
+    for(const pet of PixelPals.PETS){
+      anim.set(pet.id,'idle');anim.render(0);const idle=anim.pose.canvas.toDataURL();
+      for(const action of ['eat','drink','happy','angry']){
+        anim.set(pet.id,action);anim.render(0);
+        if(anim.pose.variant!==action||anim.pose.canvas.toDataURL()===idle)return false;
+      }
     }
     return true;
   })()`));
