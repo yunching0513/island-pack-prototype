@@ -25,7 +25,7 @@
 
 ## 本次角色圖稿
 
-- `assets/pixel-pals-atlas.png`：使用者選定的生成式大眼像素貓狗稿；四位角色的去背版。`pet-motion.js` 以分層骨架變換呈現動作，不改動原圖。
+- `assets/pixel-pals-atlas.png`：使用者選定的生成式大眼像素貓狗稿；四位角色的去背版。`pet-motion.js` 以完整角色的連續反向取樣變形呈現動作，不切割頭、身體與四肢，也不改動原圖。
 - `assets/wildlife-concepts-a.png`、`assets/wildlife-concepts-b.png`：本次原創生成式像素概念稿，參照使用者提供的外型照片與官方物種介紹；不是官方鑑種插畫。公開的圖稿不含來源照片或其商標。
 - `assets/pixel-pals-extra.png`：以使用者選定圖集為風格參考，補繪黑貓、白底虎斑幼貓、棕白狗。首頁與個體卡依毛色選用角色示意圖，剪耳、尾巴與身體狀況仍以文字紀錄為準。
 - 傳統 48×48 特徵零件仍由 `tools/make_placeholders.py` 產生。新版圖稿用於首頁、個體卡及造型與動作試玩；特徵零件支援紀錄表單的毛色與特徵組合。
