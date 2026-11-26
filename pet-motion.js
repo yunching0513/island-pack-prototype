@@ -49,6 +49,10 @@
   class Pose {
     constructor(){this.canvas=document.createElement('canvas');this.canvas.width=this.canvas.height=POSE_SIZE;this.ctx=this.canvas.getContext('2d');this.image=this.ctx.createImageData(POSE_SIZE,POSE_SIZE);}
     render(pet,a,t){
+      // Pixel animation uses 30 poses/sec; paused and reduced-motion views reuse
+      // the same pose instead of resampling nine textures every display tick.
+      const frame=Math.floor(t*30),key=pet.id+'|'+a+'|'+frame;
+      if(this.key===key)return this.canvas;this.key=key;t=frame/30;
       const src=texture(pet),out=this.image.data,m=motionAt(a,t);out.fill(0);
       for(let y=0;y<POSE_SIZE;y++)for(let x=0;x<POSE_SIZE;x++){
         const tx=x-PAD,ty=y-PAD;let sx=tx,sy=ty;
