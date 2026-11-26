@@ -1,5 +1,5 @@
 /* Pixel Pals: a continuous inverse warp of the intact character texture.
-   No disjoint body-part masks; expressions never paint over the original face. */
+   No disjoint body-part masks; expressions use complete illustrated poses, never detached face overlays. */
 (() => {
   'use strict';
   const SIZE = 112;
@@ -12,38 +12,66 @@
   const ACTIONS = [
     {id:'idle',name:'待機',hint:'輕輕呼吸，身體微微起伏。'},
     {id:'run',name:'奔跑',hint:'交替擺腿，尾巴跟著跑步節奏晃動。'},
-    {id:'eat',name:'吃飯',hint:'低頭吃飯，嘴邊有小小碎屑。'},
-    {id:'drink',name:'喝水',hint:'低頭喝水，碗裡泛起一圈圈波紋。'},
-    {id:'happy',name:'喜悅',hint:'開心跳起，身邊亮起小星星。'},
+    {id:'eat',name:'吃飯',hint:'嘴巴貼近食物，小幅點頭咀嚼，碗留在地面。'},
+    {id:'drink',name:'喝水',hint:'低頭伸舌舔水，舌尖貼近水面，水碗留在地面。'},
+    {id:'happy',name:'喜悅',hint:'笑彎眼睛、張嘴微笑，開心跳起。'},
     {id:'sad',name:'難過',hint:'低低垂頭，慢慢晃動，落下一滴眼淚。'},
-    {id:'angry',name:'生氣',hint:'氣呼呼地跺腳，冒出小小的怒氣符號。'},
+    {id:'angry',name:'生氣',hint:'皺眉、鼓起臉頰、嘴角向下，氣呼呼地跺腳。'},
     {id:'love',name:'愛心',hint:'親暱地歪頭，愛心慢慢飄上來。'}
   ];
-  const atlas = new Image();
-  const ready = new Promise((resolve,reject) => {atlas.onload=resolve;atlas.onerror=()=>reject(Error('角色圖載入失敗'));});
-  atlas.src = window.PIXEL_PALS_ATLAS || 'assets/pixel-pals-atlas.png?v=20261126';
+  const atlas = new Image(), illustrations = {};
+  const loadImage = (im,src) => new Promise((resolve,reject)=>{
+    im.onload=()=>resolve(im);im.onerror=()=>reject(Error('角色圖載入失敗'));im.src=src;
+  });
+  const ready = Promise.all([
+    loadImage(atlas,window.PIXEL_PALS_ATLAS || 'assets/pixel-pals-atlas.png?v=20261126'),
+    ...['eat','drink','happy','angry'].map(action=>{
+      illustrations[action]=new Image();
+      return loadImage(illustrations[action],'assets/pixel-pals-'+action+'.png?v=poses-20261126');
+    })
+  ]);
   const cache = new Map();
   const PAD = 16, POSE_SIZE = SIZE + PAD * 2;
   const smooth = v => {v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
-  function texture(pet) {
-    if(cache.has(pet.id))return cache.get(pet.id);
+  // Trim only transparent cell padding. Keep aspect ratio and a shared ground
+  // line so the illustrated mouth and bowl remain aligned in every frame.
+  function illustratedCrop(im,index,action) {
+    const cw=im.naturalWidth/2,ch=im.naturalHeight/2,ox=(index%2)*cw,oy=Math.floor(index/2)*ch;
+    const sample=document.createElement('canvas');sample.width=sample.height=256;
+    const c=sample.getContext('2d',{willReadFrequently:true});
+    const cellHeight=action==='drink'?ch*.945:ch;
+    c.drawImage(im,ox,oy,cw,cellHeight,0,0,256,256);
+    const d=c.getImageData(0,0,256,256).data;let left=256,top=256,right=0,bottom=0;
+    for(let y=0;y<256;y++)for(let x=0;x<256;x++)if(d[(y*256+x)*4+3]>180){left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);}
+    return [ox+Math.max(0,left-1)*cw/256,oy+Math.max(0,top-1)*cellHeight/256,Math.min(256,right-left+3)*cw/256,Math.min(256,bottom-top+3)*cellHeight/256];
+  }
+  function texture(pet,action) {
+    const variant=illustrations[action]?action:'idle',key=pet.id+'|'+variant;
+    if(cache.has(key))return cache.get(key);
     const cv=document.createElement('canvas');cv.width=cv.height=SIZE;
     const c=cv.getContext('2d',{willReadFrequently:true});c.imageSmoothingEnabled=false;
-    c.drawImage(atlas,...pet.crop,0,0,SIZE,SIZE);
-    const pixels=c.getImageData(0,0,SIZE,SIZE).data;cache.set(pet.id,pixels);return pixels;
+    if(variant==='idle')c.drawImage(atlas,...pet.crop,0,0,SIZE,SIZE);
+    else {
+      const im=illustrations[variant],crop=illustratedCrop(im,PETS.indexOf(pet),variant),scale=104/Math.max(crop[2],crop[3]);
+      c.drawImage(im,...crop,(SIZE-crop[2]*scale)/2,108-crop[3]*scale,crop[2]*scale,crop[3]*scale);
+    }
+    const pixels=c.getImageData(0,0,SIZE,SIZE).data;cache.set(key,pixels);return pixels;
   }
   // One smooth displacement field across the whole animal. Inverse sampling
   // fills every output pixel, so moving joints cannot expose polygon seams.
   function motionAt(a,t) {
-    const angle=a==='eat'||a==='drink'?.24+.025*Math.sin(t*15):a==='sad'?.055:a==='love'?.035*Math.sin(t*2):0;
+    const angle=a==='sad'?.055:a==='love'?.035*Math.sin(t*2):0;
     return {a,co:Math.cos(angle),si:Math.sin(angle),stride:Math.sin(t*Math.PI*5.4),wag:Math.sin(t*(a==='sad'?1.5:8))*(a==='love'||a==='happy'?2:1)};
   }
   function displacement(x,y,a,t,m=motionAt(a,t)) {
+    const feeding=a==='eat'||a==='drink';
+    if(feeding)return [0,.85*Math.sin(t*(a==='eat'?12:17))*smooth((104-y)/28)*smooth((x-42)/34)];
     const head=smooth((80-y)/45)*smooth((x-30)/24);
     const tail=smooth((40-x)/24)*smooth((77-y)/38);
     const feet=smooth((y-72)/35),{stride,co,si}=m,hx=x-62,hy=y-67;
     const dx=head*(hx*(co-1)-hy*si)+tail*m.wag;
-    const dy=head*(hx*si+hy*(co-1))+(a==='run'?feet*4*stride*Math.sin((x-10)*.095):0);
+    const nibble=a==='eat'||a==='drink'?.8*Math.sin(t*(a==='eat'?14:20))*smooth((100-y)/24)*smooth((x-40)/30):0;
+    const dy=head*(hx*si+hy*(co-1))+(a==='run'?feet*4*stride*Math.sin((x-10)*.095):0)+nibble;
     return [dx+(a==='run'?feet*2*stride:0),dy];
   }
   class Pose {
@@ -53,7 +81,8 @@
       // the same pose instead of resampling nine textures every display tick.
       const frame=Math.floor(t*30),key=pet.id+'|'+a+'|'+frame;
       if(this.key===key)return this.canvas;this.key=key;t=frame/30;
-      const src=texture(pet),out=this.image.data,m=motionAt(a,t);out.fill(0);
+      this.variant=illustrations[a]?a:'idle';
+      const src=texture(pet,a),out=this.image.data,m=motionAt(a,t);out.fill(0);
       for(let y=0;y<POSE_SIZE;y++)for(let x=0;x<POSE_SIZE;x++){
         const tx=x-PAD,ty=y-PAD;let sx=tx,sy=ty;
         for(let k=0;k<4;k++){const d=displacement(sx,sy,a,t,m);sx=tx-d[0];sy=ty-d[1];}
@@ -89,27 +118,15 @@
       if(a==='angry'){x+=Math.sin(t*35)*2;y-=Math.max(0,Math.sin(t*TAU*2))*5;}
       if(a==='love'){y+=slow*2;}
       if(a==='idle'){y+=Math.sin(t*2)*1.4;sy=1+.006*Math.sin(t*2);}
-      if(a==='eat'||a==='drink'){y+=18;sy=.94;tilt=.025*Math.sin(t*15);}
       c.fillStyle='rgba(47,78,45,.12)';c.beginPath();c.ellipse(310,330,114-(a==='happy'?Math.max(0,Math.sin(t*TAU*1.6))*14:0),12,0,0,TAU);c.fill();
       if(a==='run')for(let i=0;i<4;i++){c.fillStyle='rgba(113,138,99,.3)';c.fillRect(140-((t*130+i*25)%90),315+i*4,14-i*2,4);}
       c.save();if(this.direction===-1){c.translate(640,0);c.scale(-1,1);}c.translate(x,y);c.scale(2.6,2.6*sy);c.rotate(tilt);
       c.drawImage(this.pose.render(pet,a,t),-PAD,-PAD);
       c.restore();
-      // Effects stay in stage space; the original eyes and face stay intact.
+      // Effects stay in stage space; expressions are part of the illustrated face.
       if(a==='sad'){
         const q=(t*1.2)%1,ex=this.direction===1?430:210;
         c.fillStyle='#6caed5';c.fillRect(ex,225+q*70,5,8);c.fillRect(ex-2,230+q*70,9,6);
-      }
-      const mouthX=this.direction===1?440:200;
-      if(a==='eat'||a==='drink'){
-        const bx=mouthX-17;c.fillStyle=a==='drink'?'#649bb9':'#ad7751';c.fillRect(bx,324,76,9);c.fillRect(bx+7,333,62,17);c.fillStyle='#e9debe';c.fillRect(bx+4,321,68,5);
-        if(a==='eat'){
-          c.fillStyle='#714e33';for(let i=0;i<8;i++)c.fillRect(bx+9+i*7,317-(i%2)*3,5,5);
-          c.fillStyle='#bd905c';for(let i=0;i<3;i++)c.fillRect(mouthX+((t*21+i*13)%23),294+((t*70+i*10)%25),4,4);
-        }else{
-          c.strokeStyle='#86c8e4';c.lineWidth=2;for(let i=0;i<2;i++){const q=(t*2+i*.5)%1;c.beginPath();c.ellipse(bx+38,323,5+q*23,2,0,0,TAU);c.stroke();}
-          c.fillStyle='#7bb9d5';c.fillRect(mouthX+8,304+Math.sin(t*19)*3,3,5);
-        }
       }
       if(a==='love')for(let i=0;i<4;i++){const q=(t*.36+i*.25)%1;c.globalAlpha=Math.min(1,q*6)*(1-q);heart(c,220+i*50,150-q*105,2+(i%2),'#d97086');}c.globalAlpha=1;
       if(a==='happy')for(let i=0;i<5;i++){const q=t*3+i;c.fillStyle=i%2?'#d9a451':'#6e9c6a';const xx=160+i*72,yy=96+Math.sin(q)*15;c.fillRect(xx,yy,4,15);c.fillRect(xx-5,yy+5,14,4);}
