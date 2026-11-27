@@ -262,7 +262,10 @@ const newDraft = () => ({
   f: newFeat(), wild: null, cue: 'seen', n: 1, note: '', pubText: false,
 });
 const copy = o => JSON.parse(JSON.stringify(o));
-const newSurvey = () => ({ mode: 'point', phase: 'idle', t: 0, seen: 0, heard: 0, speed: 1, weather: '晴', period: '早上', extra: [] });
+const newSurvey = () => ({ mode: 'point', phase: 'idle', t: 0, pets: 0, wild: 0, min: 0, speed: 1, weather: '晴', period: '早上', extra: [] });
+/* 首頁的共同指標。從 C.HOME 複製一份，玩家接牠回家、送出觀察、記下新的貓狗時會改動；重設原型時還原。
+   jn 是旅程每一關目前的隻數（回訪那一關另有 jof：回家的總數）。gain 記下最近一次變化，顯示在指標下方。 */
+const newStat = () => ({ home: { ...C.HOME.home }, back: { ...C.HOME.back }, jn: C.JOURNEY.map(j => j.n), jof: C.JOURNEY[5].of });
 const S = {
   view: 'home', step: 0, draft: newDraft(), err: '', submitted: null, timing: 'live',
   openCard: null, seen: [], trayOpen: false, latest: '', mapRefs: {},
@@ -275,6 +278,7 @@ const S = {
   animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null,
   dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', tut: 0,
   role: 'walker', gripe: { kind: null, place: null }, gripeErr: '', tasks: copy(C.ROLE.tasks),
+  stat: newStat(), gain: {},
 };
 
 /* ───────── 共用片段 ───────── */
@@ -429,14 +433,14 @@ const ICONS = {
   record: '<path d="M12 4v16M4 12h16" stroke="currentColor" stroke-width="2.5"/>',
   survey: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 7v5l3 3" fill="none" stroke="currentColor" stroke-width="2"/>',
   nearby: '<path d="M12 22C8 16 5 13 5 9a7 7 0 1 1 14 0c0 4-3 7-7 13Z" fill="none" stroke="currentColor" stroke-width="2"/>',
-  data: '<path d="M5 21V12M12 21V4M19 21V9" stroke="currentColor" stroke-width="3"/>',
+  dex: '<rect x="5" y="3" width="14" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="2"/><path d="m12 8 1.2 2.6 2.8.3-2.1 1.9.6 2.8-2.5-1.5-2.5 1.5.6-2.8L8 10.9l2.8-.3Z" fill="currentColor"/>',
 };
 function renderNav() {
-  const items = [['record', '記錄相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['data', '開放資料']];
+  const items = [['record', '記錄相遇'], ['survey', '五分鐘觀察'], ['nearby', '看看附近'], ['dex', '物種卡']];
   $('#nav').innerHTML = items.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}>${l}</button>`).join('');
   if ($('#roleBtn')) $('#roleBtn').textContent = `角色：${C.ROLES[S.role]}`;
   $$('.band-nav [data-go]').forEach(b => { if (b.dataset.go === S.view) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); });
-  const tabs = [['home', '首頁'], ['record', '相遇'], ['survey', '觀察'], ['nearby', '附近'], ['data', '資料']];
+  const tabs = [['home', '首頁'], ['record', '相遇'], ['survey', '觀察'], ['nearby', '附近'], ['dex', '物種卡']];
   $('#tabbar').innerHTML = tabs.map(([v, l]) => `<button type="button" data-go="${v}" ${S.view === v ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[v]}</svg>${l}</button>`).join('');
 }
 const TIMING = {
@@ -471,7 +475,7 @@ function syncRail() {
 const pct = r => Math.round(r * 100);
 const one = n => (Math.round(n * 10) / 10).toFixed(1);
 function homeStats() {
-  const H = C.HOME, h = H.home, b = H.back, g = H.goals;
+  const h = S.stat.home, b = S.stat.back, g = C.HOME.goals;
   const homeRate = (h.home + h.last) / h.known, backRate = b.speciesWalks / b.hours;
   const goals = [
     { label: `回家或成為最後一代達到 ${pct(g.homeRate)}%`, now: `${pct(homeRate)}%`, p: homeRate / g.homeRate, ok: homeRate >= g.homeRate },
@@ -481,6 +485,15 @@ function homeStats() {
   ];
   return { homeRate, backRate, goals };
 }
+const gainHTML = g => g ? `<p class="gain" role="status"><b>剛剛</b>${g.from != null && g.from !== g.to ? `${esc(g.from)} → ${esc(g.to)}，` : ''}${esc(g.why)}</p>` : '';
+/* 改動「回家」的行動都經過這裡：先記下改動前後的百分比，回傳給提示訊息用的一句話 */
+function gainHome(why, fn) {
+  const from = pct(homeStats().homeRate);
+  fn(S.stat);
+  const to = pct(homeStats().homeRate);
+  S.gain.home = { from: `${from}%`, to: `${to}%`, why };
+  return from === to ? `這一區的「回家」是 ${to}%` : `這一區的「回家」從 ${from}% 變成 ${to}%`;
+}
 function goalHTML(x) {
   const w = Math.round(clamp(x.p, 0, 1) * 100);
   return `<li class="goal">
@@ -489,7 +502,7 @@ function goalHTML(x) {
   </li>`;
 }
 function viewHome() {
-  const H = C.HOME, h = H.home, b = H.back, st = homeStats(), J = C.JOURNEY;
+  const H = C.HOME, h = S.stat.home, b = S.stat.back, st = homeStats(), J = C.JOURNEY;
   return `<div class="page pad home-page">
     ${tutSeen() ? '' : `<div class="tut-hint" id="tutHint"><p>${esc(C.TUTORIAL.first)}</p><div class="acts"><button type="button" class="btn sm" id="hint-go" data-go="howto">看怎麼玩</button><button type="button" class="btn quiet sm" id="hint-hide" data-act="tut-hide">不用了</button></div></div>`}
     <section class="hero">
@@ -541,6 +554,7 @@ function viewHome() {
         <div class="metric">
           <h2>回家</h2>
           <p class="big">${pct(st.homeRate)}<small>%</small></p>
+          ${gainHTML(S.gain.home)}
           <p>已知的 ${h.known} 隻街頭貓狗中，${h.home} 隻回家、${h.last} 隻成為最後一代。</p>
           <p>本季新生幼崽 <b>${h.pups}</b> 隻，上季 ${h.pupsLast} 隻。越少越好。</p>
           <details><summary>怎麼算</summary><p>${esc(H.howHome)}</p></details>
@@ -548,7 +562,8 @@ function viewHome() {
         <div class="metric">
           <h2>回來</h2>
           <p class="big">${one(st.backRate)}<small> 種／小時</small></p>
-          <p>本季散步 ${b.walks} 次、共 ${b.hours} 小時，上季每小時 ${one(b.rateLast)} 種。常見的有${b.common.map(esc).join('、')}。</p>
+          ${gainHTML(S.gain.back)}
+          <p>本季散步 ${b.walks} 次、共 ${+b.hours.toFixed(1)} 小時，上季每小時 ${one(b.rateLast)} 種。常見的有${b.common.map(esc).join('、')}。</p>
           <details><summary>怎麼算</summary><p>${esc(H.howBack)}</p></details>
           <button type="button" class="btn sm" id="home-dex" data-act="dex">物種卡：已解鎖 ${SP_KEYS().filter(k => S.dex.has(k)).length} 張</button>
         </div>
@@ -567,7 +582,7 @@ function viewHome() {
         <h3>${esc(j.step)}</h3>
         <p class="j-who">由${esc(j.who)}確認</p>
         <p>${esc(j.d)}</p>
-        <p class="j-n">${j.of ? `回家的 ${j.of} 隻中，${j.n} 隻已回報 30 天近況` : `目前 ${j.n} 隻`}<span class="sample">示例</span></p>
+        <p class="j-n">${j.of ? `回家的 ${S.stat.jof} 隻中，${S.stat.jn[i]} 隻已回報 30 天近況` : `目前 ${S.stat.jn[i]} 隻`}<span class="sample">示例</span></p>
       </li>`).join('')}</ol>
       <div class="branch">
         <h3>最後一代</h3>
@@ -655,7 +670,8 @@ function badgeHTML(a) {
   return `<div class="home-badge"><span class="hb-ic">${HOUSE}</span><div>
     <h3>「${esc(X.badge)}」徽章</h3>
     <p><b>小隊 ${a.squad.length} 人共享。</b>${esc(X.badgeLede)}</p>
-    <p class="note">${a.squad.map(([r, t]) => esc(roleTag(r, t))).join('、')}</p></div></div>`;
+    <p class="note">${a.squad.map(([r, t]) => esc(roleTag(r, t))).join('、')}</p>
+    ${S.gain.home ? `<p class="gain"><b>這一區</b>${S.gain.home.from !== S.gain.home.to ? `「回家」${esc(S.gain.home.from)} → ${esc(S.gain.home.to)}` : `「回家」${esc(S.gain.home.to)}`}</p><button type="button" class="btn sm" id="badge-home" data-go="home">回首頁看進度</button>` : ''}</div></div>`;
 }
 function adoptHTML(a) {
   const X = C.ADOPT;
@@ -1128,29 +1144,39 @@ function fillScenario(n) {
   }
 }
 function viewReceipt() {
-  const t = S.submitted, st = t.state || 'review';
+  const t = S.submitted, st = t.state || 'review', d = t.draft, wild = d.species === 'wild';
   const idx = { review: 1, published: 3, stats: 3, returned: 1 }[st];
+  const fresh = t.newId ? findAnimal(t.newId) : null, n = t.cands?.length || 0;
+  const title = wild ? '相遇已送出' : n ? '這可能是誰？' : '你發現了一隻新的' + (d.species === 'cat' ? '貓' : '狗');
   return `<div class="page pad">
-    <h1 style="font-size:clamp(30px,5cqi,40px)">相遇已送出</h1>
+    <h1 style="font-size:clamp(30px,5cqi,40px)">${title}</h1>
+    ${fresh ? '<p class="lede">牠的第 1 關「被看見」由你確認，你是牠小隊的第一個人。</p>' : n ? `<p class="lede">附近有 ${n} 張長得像的個體卡，照護者確認後，你就加入牠的小隊。</p>` : ''}
     <div class="receipt">
-      <div class="avatar">${spriteHTML(t.draft.species, t.draft.f, t.draft.wild, true, false)}<div><p class="id">${t.id}</p><p><b>${esc(t.user.summary)}</b></p></div></div>
-      <p class="step-note">${esc(t.place)}。${isSensitive(t.draft) ? `敏感物種：公開時只到${esc(t.draft.pin.town)}，延後 ${C.WILD.delay} 天。` : ''}${st === 'review' ? '目前等待檢核，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
-      <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
+      <div class="avatar">${spriteHTML(d.species, d.f, d.wild, true, false)}<div><p><b>${esc(t.user.summary)}</b></p><p class="small">${esc(t.place)}</p></div></div>
     </div>
-    ${t.cands?.length ? `<section class="block"><h2 class="sec">可能是同一隻</h2>
-      <p class="sec-lede">${esc(C.ANIMAL.candNote)}</p>
+    ${n ? `<section class="block"><h2 class="sec">可能是同一隻</h2>
+      <p class="sec-lede">系統依特徵找到 ${n} 張可能是同一隻的個體卡。照護者確認之後，這次相遇會併進牠的卡片，你也會加入牠的小隊。</p>
       <ul class="a-list">${t.cands.map(id => animalMini(findAnimal(id))).join('')}</ul>
+    </section>` : ''}
+    ${fresh ? `<section class="block rc-game" aria-labelledby="rcHead"><h2 class="sec" id="rcHead">第 1 關「被看見」由你確認</h2>
+      <ol class="rc-steps" aria-label="回家旅程六關">${C.JOURNEY.map((j, i) => `<li class="${i === 0 ? 'done' : i === 1 ? 'cur' : ''}"${i === 1 ? ' aria-current="step"' : ''}><span>${i + 1}</span>${esc(j.step)}</li>`).join('')}</ol>
+      <p class="sec-lede">附近還沒有長得像的個體卡，所以牠有了一張新的。下一關「被認識」：照護者確認牠是同一隻，鄰里一起幫牠取名字。</p>
+      <div class="next two"><button type="button" class="btn primary" id="rc-card" data-act="animal" data-id="${fresh.id}">看牠的個體卡</button></div>
     </section>` : ''}
     ${t.dex ? dexReceiptHTML(t) : ''}
     <section class="block"><h2 class="sec">下一步</h2>
       <div class="next two">
-        <button type="button" class="btn primary" data-go="nearby">看看附近</button>
         <button type="button" class="btn" data-act="again">再記一筆</button>
+        <button type="button" class="btn" id="rc-home" data-go="home">回首頁看進度</button>
       </div>
-      <div class="demo" style="margin-top:16px"><button type="button" data-go="admin">原型捷徑：到管理後台核准這筆</button></div>
-      <p class="note" style="margin-top:8px">虛線按鈕是原型才有的捷徑，居民版不會出現。</p>
+      <details class="rc-more"><summary>紀錄編號與檢核進度</summary>
+        <p class="id">${t.id}</p>
+        <p class="step-note">${isSensitive(d) ? `敏感物種：公開時只到${esc(d.pin.town)}，延後 ${C.WILD.delay} 天。` : ''}${st === 'review' ? '每一筆都由人看過才公開，公開版本產製前不會出現在地圖上。' : st === 'returned' ? '這筆紀錄已退回。' : '這筆紀錄已檢核，現在可以在「看看附近」讀到。'}</p>
+        <ol class="track">${['已收到', '等待檢核', '產製公開版本', '已發布'].map((l, i) => `<li class="${i <= idx ? 'on' : ''}">${l}</li>`).join('')}</ol>
+        <div class="demo" style="margin-top:16px"><button type="button" data-go="admin">原型捷徑：到管理後台核准這筆</button></div>
+        <p class="note" style="margin-top:8px">虛線按鈕是原型才有的捷徑，居民版不會出現。</p>
+      </details>
     </section>
-    <section class="block invite"><div><h2 class="sec">想持續留意這個地方？</h2><p class="sec-lede">用同樣的方法定期觀察，才看得出變化。</p></div><button type="button" class="btn" data-go="survey">參加持續觀察</button></section>
   </div>`;
 }
 /* ───────── 物種卡（#36） ───────── */
@@ -1168,7 +1194,7 @@ function dexReceiptHTML(t) {
   </section>`;
 }
 function speciesCardHTML(k, isNew = false) {
-  const s = C.SPECIES[k], W = C.WILD, b = C.HOME.back;
+  const s = C.SPECIES[k], W = C.WILD, b = S.stat.back;
   return `<article class="sp-card${isNew ? ' new' : ''}" aria-labelledby="spn-${k}">
     <div class="sp-top">${spriteHTML('wild', newFeat(), k, true)}
       <div><p class="sp-group">${esc(groupLabel(s.group))}${s.sensitive ? '<span class="badge">敏感物種</span>' : ''}<span class="sample">示例，待專家撰寫</span></p>
@@ -1232,6 +1258,17 @@ function submitRecord() {
     hits.forEach(a => a.cands.unshift({ id: t.id, month: d.when.slice(0, 7), town: d.pin.town, f: copy(d.f), mine: true }));
     t.cands = hits.map(a => a.id);
     t.ai.note = `找到 ${hits.length} 張可能是同一隻的個體卡（示例），等照護者確認`;
+    if (!hits.length) {
+      const m = d.when.slice(0, 7), a = {
+        id: `n${S.animals.length + 1}`, sp: d.species, town: d.pin.town, village: null, area: `${d.pin.vname}一帶`, seen: 1, last: m,
+        f: copy(d.f), name: null, noms: [], done: 1, log: [[m, '你']], squad: [['walker', '你']], diary: [],
+        range: '還沒確認範圍。', health: '還不清楚。', care: '還沒有照護者。', cands: [], mine: true,
+      };
+      S.animals.push(a); S.stat.jn[0]++;
+      t.newId = a.id;
+      t.ai.note = '沒有找到可能是同一隻的個體卡，已開一張新的（示例），等照護者確認';
+      S.gain.home = { why: `你記下一隻新的${d.species === 'cat' ? '貓' : '狗'}，牠走進第 1 關「被看見」` };
+    }
   }
   S.queue.unshift(t);
   S.submitted = t;
@@ -1244,10 +1281,10 @@ const mmss = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.
 function viewSurvey() {
   const v = S.sv, point = v.mode === 'point', run = v.phase === 'run';
   const site = D.sites[0], visits = [...site.visits.map(x => x.seen), ...v.extra];
-  const withDogs = visits.filter(Boolean).length, shown = point ? TOTAL - v.t : v.t;
+  const withAny = visits.filter(Boolean).length, shown = point ? TOTAL - v.t : v.t;
   return `<div class="page pad">
     <div class="page-head"><h1>${point ? '站定五分鐘' : '走一次固定路線'}</h1>
-      <p class="lede">${point ? '找一個點停下來，留意周遭的聲音與動靜。' : '沿著你每天走的路走一次，記下時間和遇到的狗。'}沒看到狗也要送出，那筆紀錄同樣有用。</p></div>
+      <p class="lede">${point ? '找一個點停下來，留意周遭的貓狗和野生動物，看見或聽見都算。' : '沿著你每天走的路走一次，記下遇到的貓狗和野生動物。'}什麼都沒看到也要送出，這筆紀錄讓首頁的「回來」算得更準。</p></div>
     <div class="form-sec">
       <div class="seg" role="group" aria-label="觀察方法">
         <button type="button" id="m-point" data-act="sv-mode" data-v="point" ${pressed(point)}>定點五分鐘</button>
@@ -1260,19 +1297,19 @@ function viewSurvey() {
         <p class="clock" id="clock" role="timer">${mmss(shown)}</p>
         ${point ? `<div class="clockbar" aria-hidden="true"><i id="clockFill" style="width:${v.t / TOTAL * 100}%"></i>${[1, 2, 3, 4].map(i => `<b style="left:${i * 20}%"></b>`).join('')}</div>` : ''}
         <div class="tally">
-          <button type="button" id="t-seen" data-act="sv-tally" data-k="seen" ${run ? '' : 'disabled'}><b id="n-seen">${v.seen}</b>看見</button>
-          <button type="button" id="t-heard" data-act="sv-tally" data-k="heard" ${run ? '' : 'disabled'}><b id="n-heard">${v.heard}</b>聽見</button>
+          <button type="button" id="t-pets" data-act="sv-tally" data-k="pets" ${run ? '' : 'disabled'}><b id="n-pets">${v.pets}</b>貓狗（隻）</button>
+          <button type="button" id="t-wild" data-act="sv-tally" data-k="wild" ${run ? '' : 'disabled'}><b id="n-wild">${v.wild}</b>野生動物（種）</button>
         </div>
-        <p class="note" style="margin-top:8px">計算的是犬隻隻數。同一隻狗反覆吠叫只算一隻。</p>
+        <p class="note" style="margin-top:8px">貓狗算隻數，同一隻來來去去只算一隻。野生動物算種數，看見或聽見都算，同一種只算一次。</p>
         ${v.phase === 'done' ? `
-          <p class="safe" style="margin-top:16px">${v.seen + v.heard ? `這次看見 ${v.seen} 隻、聽見 ${v.heard} 隻。` : '完成觀察，未見犬隻。這筆紀錄和有看到狗的紀錄一樣重要。'}</p>
+          <p class="safe" style="margin-top:16px">${v.pets + v.wild ? `這次看見 ${v.pets} 隻貓狗、記到 ${v.wild} 種野生動物。` : '完成觀察，什麼都沒看到。這筆紀錄和有看到動物的一樣重要。'}</p>
           <div class="cta"><button type="button" class="btn primary" id="sv-send" data-act="sv-send">送出這次觀察</button><button type="button" class="btn quiet" id="sv-redo" data-act="sv-reset">重來</button></div>`
     : v.phase === 'sent' ? `
-          <p class="safe" style="margin-top:16px">已送出。右邊多了一格。</p>
-          <div class="cta"><button type="button" class="btn" id="sv-again" data-act="sv-reset">再觀察一次</button></div>`
+          <p class="safe" style="margin-top:16px">已送出。右邊多了一格，首頁的「回來」也算進了這 ${v.min} 分鐘${v.wild ? `和 ${v.wild} 種野生動物` : ''}。</p>
+          <div class="cta"><button type="button" class="btn" id="sv-again" data-act="sv-reset">再觀察一次</button><button type="button" class="btn quiet" id="sv-home" data-go="home">回首頁看進度</button></div>`
       : `<div class="cta">
           <button type="button" class="btn primary" id="sv-go" data-act="sv-toggle">${run ? '暫停' : v.t ? '繼續' : '開始觀察'}</button>
-          ${v.t ? `<button type="button" class="btn" id="sv-end" data-act="sv-end">${point ? '提早結束' : '走完了'}</button>` : ''}
+          ${v.t || run ? `<button type="button" class="btn" id="sv-end" data-act="sv-end">${point ? '提早結束' : '走完了'}</button>` : ''}
           <span class="demo" style="margin:0"><button type="button" id="sv-fast" data-act="sv-fast" ${pressed(v.speed > 1)}>${v.speed > 1 ? '快轉中（30 倍）' : '快轉（原型用）'}</button></span>
         </div>`}
         <div class="form-sec">
@@ -1285,11 +1322,11 @@ function viewSurvey() {
       </div>
       <div>
         <h2 class="sec" style="font-size:22px">這裡的觀察紀錄</h2>
-        <p class="bigratio">${withDogs}／${visits.length}</p>
-        <p class="small">次觀察有看見或聽見犬隻，其他是「未見」。</p>
-        <div class="visits" aria-label="每次觀察的犬隻數">${visits.map((n, i) => `<span class="visit ${n ? 'yes' : ''} ${i >= site.visits.length ? 'new' : ''}">${n}</span>`).join('')}</div>
-        <p class="note" style="margin-top:8px">每格是一次觀察，數字是犬隻隻數。空心的 0 就是「未見」。</p>
-        <p class="small" style="margin-top:16px">同樣的方法重複做，才能和其他時間、其他地方比較。比例也不等於犬隻數量。</p>
+        <p class="bigratio">${withAny}／${visits.length}</p>
+        <p class="small">次觀察有看見或聽見動物，其他是「什麼都沒看到」。</p>
+        <div class="visits" aria-label="每次觀察記到的動物">${visits.map((n, i) => `<span class="visit ${n ? 'yes' : ''} ${i >= site.visits.length ? 'new' : ''}">${n}</span>`).join('')}</div>
+        <p class="note" style="margin-top:8px">每格是一次觀察，數字是貓狗隻數加上野生動物種數（示例）。空心的 0 就是什麼都沒看到。</p>
+        <p class="small" style="margin-top:16px">同樣的方法重複做，才能和其他時間、其他地方比較。這是紀錄，不等於動物的數量。</p>
       </div>
     </div>
   </div>`;
@@ -1310,7 +1347,7 @@ function startTimer() {
 function viewNearby() {
   const n = S.nb;
   return `<div class="page pad">
-    <div class="page-head"><h1>看看附近</h1><p class="lede">按區域和月份閱讀經過檢核的紀錄。不同來源的內容會標出類型。</p></div>
+    <div class="page-head"><h1>看看附近</h1><p class="lede">附近的貓狗走到回家旅程的哪一關，哪些野生動物回來了。</p></div>
     <div class="nb-bar">
       <p class="nb-sum" id="nbSum"></p>
       <button type="button" class="btn sm" id="nbToggle" data-act="nb-filters" aria-expanded="${n.open}" aria-controls="nbFilters">篩選</button>
@@ -1321,31 +1358,56 @@ function viewNearby() {
         <label class="field" for="nb-vill"><span>里</span><select id="nb-vill" data-nb="village" ${n.town === 'all' ? 'disabled' : ''}><option value="all">${n.town === 'all' ? '先選行政區' : '全區各里'}</option>${G.villages.filter(v => v.t === n.town).sort((a,b) => a.v.localeCompare(b.v,'zh-Hant')).map(v => `<option value="${v.c}" ${n.village === v.c ? 'selected' : ''}>${esc(v.v)}</option>`).join('')}</select></label>
         <label class="field" for="nb-month"><span>月份</span><select id="nb-month" data-nb="month"><option value="all">${fmtMonth('all')}</option>${C.FILTER_MONTHS.map(m => `<option value="${m}" ${n.month === m ? 'selected' : ''}>${fmtMonth(m)}</option>`).join('')}</select></label>
       </div>
-      <div class="chips" role="group" aria-label="資料類型">${Object.entries(C.KINDS).map(([k, o]) => `<button type="button" class="chip" id="kind-${k}" data-act="nb-kind" data-k="${k}" ${pressed(n.kinds.has(k))}><span class="tag">${mark(o.mark)}${o.label}</span></button>`).join('')}</div>
+      <div class="chips" role="group" aria-label="地圖與故事的資料類型">${Object.entries(C.KINDS).map(([k, o]) => `<button type="button" class="chip" id="kind-${k}" data-act="nb-kind" data-k="${k}" ${pressed(n.kinds.has(k))}><span class="tag">${mark(o.mark)}${o.label}</span></button>`).join('')}</div>
     </div>
-    <div class="nb-grid">
+    ${nearbyPetsHTML()}
+    ${nearbyWildHTML()}
+    <section class="block" aria-labelledby="nbMapHead">
+      <h2 class="sec" id="nbMapHead">相遇地圖</h2>
+      <p class="sec-lede">顏色是經過檢核的相遇與觀察筆數，不是動物的數量。</p>
+      <div class="nb-grid">
       <div>
         <div class="map map-nb" id="nbMap"></div>
         <div class="map-opts">
           <div class="seg" role="group" aria-label="地圖尺度">${['town', 'vill', 'g1000'].map(s => `<button type="button" id="sc-${s}" data-act="nb-scale" data-v="${s}" ${pressed(n.scale === s)}>${SCALES[s].label}</button>`).join('')}</div>
-          <div class="seg" role="group" aria-label="地圖指標"><button type="button" id="mt-count" data-act="nb-metric" data-v="count" ${pressed(n.metric === 'count')}>紀錄筆數</button><button type="button" id="mt-rate" data-act="nb-metric" data-v="rate" ${pressed(n.metric === 'rate')}>見犬比例</button></div>
+          <div class="seg" role="group" aria-label="地圖指標"><button type="button" id="mt-count" data-act="nb-metric" data-v="count" ${pressed(n.metric === 'count')}>紀錄筆數</button><button type="button" id="mt-rate" data-act="nb-metric" data-v="rate" ${pressed(n.metric === 'rate')}>見到動物比例</button></div>
         </div>
         <div class="legend" id="nbLegend"></div>
-        <p class="note" style="margin-top:8px">紀錄筆數不等於犬隻數量，顏色深不代表密度最高，斜線不代表沒有犬隻。</p>
+        <p class="note" style="margin-top:8px">筆數不等於動物的數量。顏色深不代表動物最多，斜線不代表沒有動物。</p>
       </div>
       <aside class="area" id="nbArea" aria-live="polite"></aside>
-    </div>
+      </div>
+    </section>
     <section class="block" id="nbList"></section>
     <section class="block">
       <h2 class="sec">接下來可以做什麼</h2>
       <div class="next">
-        <button type="button" class="btn" data-act="org">查看服務條件與窗口</button>
-        <button type="button" class="btn" data-go="survey">參加持續觀察</button>
-        <button type="button" class="btn" data-go="record">記錄一次相遇</button>
+        <button type="button" class="btn" data-go="record">記錄相遇</button>
+        <button type="button" class="btn" data-go="survey">站定五分鐘</button>
+        <button type="button" class="btn" data-act="dex">看物種卡</button>
       </div>
-      <p class="note" style="margin-top:8px" id="orgNote" hidden>正式版會依所選區域列出組織、服務條件與窗口。目前都待查核。</p>
     </section>
   </div>`;
+}
+function nearbyPetsHTML() {
+  const t = S.nb.town, list = S.animals.filter(a => t === 'all' || a.town === t);
+  return `<section class="block" aria-labelledby="nbPets"><h2 class="sec" id="nbPets">附近的牠們</h2>
+    <p class="sec-lede">點進個體卡，看牠走到第幾關、小隊有誰。位置只到地標一帶，不會出現座標，也看不到其他玩家在哪裡。<span class="sample">示例</span></p>
+    ${list.length ? `<ul class="a-list">${list.map(animalMini).join('')}</ul>` : `<p class="sec-lede">${esc(t)}還沒有個體卡。記下一次相遇，就可能是這一區的第一張。</p>`}
+  </section>`;
+}
+/* 稀有物種（rec 為 0 的擴充示例，例如石虎）不列在附近 */
+function nearbyWildHTML() {
+  const keys = SP_KEYS().filter(k => C.SPECIES[k].rec).sort((p, q) => C.SPECIES[q].rec - C.SPECIES[p].rec);
+  return `<section class="block" aria-labelledby="nbWild"><h2 class="sec" id="nbWild">回來的野生動物</h2>
+    <p class="sec-lede">${esc(C.HOME.area)}本季 ${S.stat.back.walks} 次散步中，有幾次記錄到牠。這是紀錄，不是數量。<span class="sample">示例</span></p>
+    <ul class="dex">${keys.map(k => {
+      const s = C.SPECIES[k];
+      return `<li>${S.dex.has(k)
+        ? `<button type="button" class="a-mini" id="nw-${k}" data-act="sp-go" data-id="${k}">${spriteHTML('wild', newFeat(), k).replace('class="px', 'class="px sm')}<span><b>${esc(s.name)}</b><span class="a-mini-sub">${s.rec} 次散步記到</span></span></button>`
+        : `<div class="a-mini locked"><span class="px sm px-unk" role="img" aria-label="還沒解鎖">?</span><span><b>一種${esc(groupLabel(s.group))}</b><span class="a-mini-sub">${s.rec} 次散步記到・你還沒解鎖</span></span></div>`}</li>`;
+    }).join('')}</ul>
+  </section>`;
 }
 function legendHTML(sc, metric) {
   if (metric === 'rate') {
@@ -1410,13 +1472,13 @@ function renderArea(cells) {
   const small = n.sel && n.sel.scale === n.scale && c.n > 0 && c.n < k;
   const empty = !c.n && !c.s;
   $('#nbArea').innerHTML = `<h2>${esc(title)}</h2><p class="note">${fmtMonth(n.month)}${n.sel ? '' : '。點地圖看單一區域。'}</p>
-    <dl><dt>偶遇紀錄</dt><dd>${small ? `少於 ${k} 筆` : `${c.n} 筆`}</dd><dt>持續觀察</dt><dd>${c.s} 次</dd><dt>見犬</dt><dd>${c.sd} 次</dd><dt>見犬比例</dt><dd>${c.s ? Math.round(c.sd / c.s * 100) + '%' : '—'}</dd><dt>觀察努力量</dt><dd>${c.min} 分鐘</dd></dl>
-    <p class="warn">${empty ? '這裡沒有資料。可能沒有人走過，不表示沒有犬隻。' : '偶遇紀錄受使用者路線影響。跨地區比較時，請看持續觀察的見犬比例。'}</p>`;
+    <dl><dt>相遇紀錄</dt><dd>${small ? `少於 ${k} 筆` : `${c.n} 筆`}</dd><dt>持續觀察</dt><dd>${c.s} 次</dd><dt>見到動物</dt><dd>${c.sd} 次</dd><dt>見到動物比例</dt><dd>${c.s ? Math.round(c.sd / c.s * 100) + '%' : '—'}</dd><dt>觀察努力量</dt><dd>${c.min} 分鐘</dd></dl>
+    <p class="warn">${empty ? '這裡沒有資料。可能還沒有人走過，不表示沒有動物。' : '相遇紀錄受散步路線影響。跨地區比較時，請看持續觀察的「見到動物比例」。'}</p>`;
 }
 function renderStoryList() {
   const n = S.nb;
   const list = S.stories.filter(s => n.kinds.has(s.kind) && (n.town === 'all' || s.town === n.town) && (n.month === 'all' || s.month === n.month) && (n.village === 'all' || s.village === byCode.get(n.village)?.v));
-  $('#nbList').innerHTML = `<h2 class="sec">${n.town === 'all' ? '臺北市' : esc(n.town)}的紀錄</h2>
+  $('#nbList').innerHTML = `<h2 class="sec">${n.town === 'all' ? '臺北市' : esc(n.town)}的鄰里故事</h2>
     ${list.length ? `<div class="stories two">${list.map(storyHTML).join('')}</div>` : '<p class="sec-lede">這個範圍還沒有公開的紀錄。換個月份或資料類型看看。</p>'}`;
 }
 function mountNearby() {
@@ -1439,14 +1501,14 @@ function mountNearby() {
 function viewData() {
   const x = S.dx;
   return `<div class="page pad">
-    <div class="page-head"><h1>開放資料</h1><p class="lede">公開資料由後端篩選與聚合後才產製。這裡說明它能回答什麼、不能回答什麼，以及怎麼取得。</p></div>
+    <div class="page-head"><h1>開放資料</h1><p class="lede">公開資料由後端篩選與聚合後才產製。這裡說明它能回答什麼、不能回答什麼，以及怎麼取得。</p><p class="note">團隊與研究者用的討論畫面，放在原型外框裡；玩家的分頁不會出現。</p></div>
     <section class="block">
       <h2 class="sec">這份資料能說什麼</h2>
       <div class="say">
         <div><b>可以說</b><b>不能說</b></div>
-        <div><span>哪些地方有經檢核的目擊紀錄</span><span>這裡有多少隻狗</span></div>
-        <div><span>同樣方法下，見犬比例怎麼變化</span><span>顏色最深的地方犬隻密度最高</span></div>
-        <div><span>哪些地方還沒有人記錄</span><span>沒有紀錄的地方沒有狗</span></div>
+        <div><span>哪些地方有經檢核的相遇紀錄</span><span>這裡有多少隻動物</span></div>
+        <div><span>同樣方法下，見到動物的比例怎麼變化</span><span>顏色最深的地方動物最多</span></div>
+        <div><span>哪些地方還沒有人記錄</span><span>沒有紀錄的地方沒有動物</span></div>
       </div>
     </section>
     <section class="block">
@@ -1454,8 +1516,8 @@ function viewData() {
       <div class="tbl-wrap"><table>
         <thead><tr><th>類型</th><th>可支援的分析</th><th>需保留的條件</th></tr></thead>
         <tbody>
-          <tr><td><b>偶遇紀錄</b></td><td>目擊分布、回報趨勢、事件線索、資料缺口</td><td>觀察時間、位置精度、來源、品質、回報方式</td></tr>
-          <tr><td><b>持續觀察</b></td><td>目擊頻率、跨時間跨區比較的指標</td><td>方法、時長、路線、未見犬隻的結果</td></tr>
+          <tr><td><b>相遇紀錄</b></td><td>相遇分布、回報趨勢、事件線索、資料缺口</td><td>觀察時間、位置精度、來源、品質、回報方式</td></tr>
+          <tr><td><b>持續觀察</b></td><td>目擊頻率、跨時間跨區比較的指標</td><td>方法、時長、路線、什麼都沒看到的結果</td></tr>
           <tr><td><b>整合研究</b></td><td>偏差校正後的分布或趨勢估計</td><td>足夠資料、合適模型、外部驗證、不確定性</td></tr>
         </tbody></table></div>
     </section>
@@ -1480,12 +1542,12 @@ function viewData() {
     </section>
     <section class="block">
       <h2 class="sec">為什麼要記錄「沒看到」</h2>
-      <p>同樣的觀察程序下，有犬目擊從 40 次增為 60 次，看起來變多了。完成觀察卻從 100 次增為 200 次，目擊比例其實從四成降為三成。</p>
+      <p>同樣的觀察程序下，見到動物從 40 次增為 60 次，看起來變多了。完成觀察卻從 100 次增為 200 次，見到的比例其實從四成降為三成。</p>
       <div class="mult">
         <div><h3>只看次數：上升</h3>${slope([40, 60], 80, '次', 'up')}</div>
         <div><h3>看比例：下降</h3>${slope([40, 30], 50, '%', 'dn')}</div>
       </div>
-      <p class="note" style="margin-top:8px">數字取自構想文件第六節的例子。比例比筆數有比較基礎，但它仍不是犬數變化。</p>
+      <p class="note" style="margin-top:8px">數字取自構想文件第六節的例子。比例比筆數有比較基礎，但它仍不是動物數量的變化。</p>
     </section>
     <section class="block">
       <h2 class="sec">下載</h2>
@@ -1519,7 +1581,7 @@ function publicRows() {
   const period = x.month === 'all' ? '2026-05/2026-11' : x.month;
   return [...cells.values()].filter(c => c.n + c.s >= x.k).map(c => ({
     month: period, area_id: c.key, area_name: areaName(x.scale, c.key), records: c.n, surveys: c.s,
-    surveys_with_dogs: c.sd, effort_minutes: c.min, quality: qualityOf(c), version: 'v0.1-sample',
+    surveys_with_animals: c.sd, effort_minutes: c.min, quality: qualityOf(c), version: 'v0.1-sample',
   })).sort((a, b) => b.records - a.records);
 }
 const toCSV = rows => [C.FIELDS.map(f => f[0]).join(','), ...rows.map(r => C.FIELDS.map(f => r[f[0]]).join(','))].join('\n');
@@ -1828,7 +1890,7 @@ const ACT = {
   },
   rail() { document.body.dataset.rail = document.body.dataset.rail === 'off' ? 'on' : 'off'; syncRail(); },
   reset() {
-    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', role: 'walker', gripe: { kind: null, place: null }, gripeErr: '', tasks: copy(C.ROLE.tasks) });
+    Object.assign(S, { step: 0, draft: newDraft(), err: '', submitted: null, openCard: null, seen: [], latest: '', sv: newSurvey(), queue: copy(C.QUEUE).map(t => ({ ...t, fixed: [], human: {} })), done: [], cards: copy(C.CARDS), requests: copy(C.REQUESTS), stories: copy(C.STORIES), animals: copy(C.ANIMALS), aid: null, voted: [], nomText: '', diaryText: '', diaryHits: null, adErr: false, dex: new Set(C.WILD.unlocked), spid: null, tier: 'pub', role: 'walker', gripe: { kind: null, place: null }, gripeErr: '', tasks: copy(C.ROLE.tasks), stat: newStat(), gain: {} });
     Object.assign(D, makeData());
     toast('原型已重設。');
     go('home');
@@ -1884,12 +1946,18 @@ const ACT = {
   'sv-tally'(t) { const k = t.dataset.k; S.sv[k]++; $('#n-' + k).textContent = S.sv[k]; },
   'sv-end'() { stopTimer(); S.sv.phase = 'done'; rerender(); },
   'sv-send'() {
-    const v = S.sv, n = v.seen + v.heard, a = D.sites[0].a;
-    v.extra.push(n);
-    D.surveys.push({ x: a.x, y: a.y, vill: a.v.c, town: a.v.t, month: '2026-11', has: n > 0, seen: n, min: Math.round(v.t / 60) || 1 });
+    const v = S.sv, n = v.pets + v.wild, a = D.sites[0].a, min = Math.round(v.t / 60) || 1;
+    v.extra.push(n); v.min = min;
+    D.surveys.push({ x: a.x, y: a.y, vill: a.v.c, town: a.v.t, month: '2026-11', has: n > 0, seen: n, min });
+    /* 「回來」＝每次觀察記到的種數加總 ÷ 觀察總時數，這次的時間和種數都算進去 */
+    const from = one(homeStats().backRate), b = S.stat.back;
+    b.walks++; b.hours += min / 60; b.speciesWalks += v.wild;
+    const to = one(homeStats().backRate);
+    S.gain.back = { from: `${from} 種`, to: `${to} 種`, why: v.wild ? `你的 ${min} 分鐘觀察記到 ${v.wild} 種野生動物` : `你送出 ${min} 分鐘「什麼都沒看到」，讓「回來」算得更準` };
     v.phase = 'sent'; rerender();
-    toast(n ? '已送出。' : '已送出「未見犬隻」。');
+    toast(n ? '已送出，算進首頁的「回來」。' : '已送出「什麼都沒看到」，一樣算進「回來」。');
   },
+  'sp-go'(t) { S.spid = t.dataset.id; go('dex'); },
   'sv-reset'() { stopTimer(); S.sv = { ...newSurvey(), mode: S.sv.mode, extra: S.sv.extra, weather: S.sv.weather, period: S.sv.period }; rerender(); },
   'nb-kind'(t) {
     const k = t.dataset.k, s = S.nb.kinds;
@@ -1946,7 +2014,7 @@ const ACT = {
   'cand-yes'(t) {
     const a = findAnimal(S.aid), [c] = a.cands.splice(+t.dataset.i, 1);
     a.seen++; if (c.month > a.last) a.last = c.month;
-    if (a.done < 2) { a.done = 2; a.log[1] = ['2026-11', 'C1']; }
+    if (a.done < 2) { a.done = 2; a.log[1] = ['2026-11', 'C1']; S.stat.jn[0]--; S.stat.jn[1]++; }
     if (!a.squad.some(([r, g]) => r === 'carer')) a.squad.push(['carer', 'C1']);
     if (c.mine && !a.squad.some(([, g]) => g === '你')) a.squad.push(['walker', '你']);
     rerender(); toast(`已併進${a.name || '這隻'}的個體卡。`);
@@ -1961,12 +2029,15 @@ const ACT = {
   },
   'ad-ready'() {
     const a = findAnimal(S.aid);
-    a.done = 4; a.log[3] = ['2026-11', 'H1'];
+    a.done = 4; a.log[3] = ['2026-11', 'H1']; S.stat.jn[2]--; S.stat.jn[3]++;
     if (!a.squad.some(([, g]) => g === 'H1')) a.squad.push(['foster', 'H1']);
     adMove(`${a.name || '牠'}準備好了，可以開始找家。`);
   },
-  'ad-last'() { const a = findAnimal(S.aid); a.branch = 'last'; adMove('牠會由照護者守護，成為最後一代。'); },
-  'ad-back'() { const a = findAnimal(S.aid); a.branch = null; a.done = 3; adMove('回到「準備好」，等中途評估。'); },
+  'ad-last'() {
+    const a = findAnimal(S.aid), msg = gainHome(`${a.name || '牠'}成為最後一代`, s => { s.home.last++; s.jn[2]--; });
+    a.branch = 'last'; adMove(`牠會由照護者守護，成為最後一代。${msg}。`);
+  },
+  'ad-back'() { const a = findAnimal(S.aid); a.branch = null; a.done = 3; S.stat.home.last--; S.stat.jn[2]++; adMove('回到「準備好」，等中途評估。'); },
   'ad-q'(t) { const d = adOf(findAnimal(S.aid)); d.ans[t.dataset.k] = d.ans[t.dataset.k] === t.dataset.v ? null : t.dataset.v; rerender(); },
   'ad-apply'() {
     const a = findAnimal(S.aid), d = adOf(a);
@@ -1979,12 +2050,14 @@ const ACT = {
   'ad-check'(t) { const d = adOf(findAnimal(S.aid)), k = t.dataset.k, i = d.checks.indexOf(k); if (i >= 0) d.checks.splice(i, 1); else d.checks.push(k); rerender(); },
   'ad-go'() {
     const a = findAnimal(S.aid);
+    const msg = gainHome(`${a.name || '牠'}回家了`, s => { s.home.home++; s.jn[3]--; s.jn[4]++; s.jof++; });
     a.done = 5; a.log[4] = ['2026-11', 'H1'];
-    adMove(`${a.name || '牠'}回家了！小隊 ${a.squad.length} 人一起得到「回家」徽章。`);
+    adMove(`${a.name || '牠'}回家了！小隊 ${a.squad.length} 人一起得到「回家」徽章，${msg}。`);
   },
   'ad-visit'() {
     const a = findAnimal(S.aid), d = adOf(a), [n, text] = C.ADOPT.visits[d.visits], m = { 7: '2026-11', 30: '2026-12', 90: '2027-02' }[n];
     d.visits++;
+    if (n === 30) S.stat.jn[5]++;
     a.diary.unshift([m, 'foster', '你', text]);
     if (d.visits === C.ADOPT.visits.length) { a.done = 6; a.log[5] = [m, 'H1']; }
     adMove(`第 ${n} 天的近況已回報${a.done === 6 ? '，旅程走完了' : ''}。`);

@@ -23,6 +23,7 @@
   --mono:ui-monospace,Menlo,Consolas,monospace;
   --s1:4px;--s2:8px;--s3:16px;--s4:24px;--s5:32px;--s6:48px;--s7:64px;--s8:96px;
   --side:32px; --tabh:64px;
+  --tabbar:75px; /* 底部分頁列實際的總高：polish.css 的 1px 框線、6px 上距加 68px 按鈕。貼著分頁列的元素用這個 */
   /* 三個值都設為 0 就回到方角 */
   --r:14px; --r-sm:10px; --r-lg:22px;
 }
@@ -373,7 +374,7 @@ input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
 .prov b{font-weight:500;color:var(--warn)}
 .locked{border:1px dashed var(--ink);padding:12px;font-size:15px;line-height:1.6;margin-top:var(--s2)}
 @container app (max-width:699.98px){
-  .rec-cards{position:sticky;bottom:var(--tabh);z-index:10;background:var(--paper);margin-inline:calc(-1*var(--padx,20px));padding-inline:var(--padx,20px);border-top:2px solid var(--ink);padding-block:var(--s1)}
+  .rec-cards{position:sticky;bottom:var(--tabbar);z-index:10;background:var(--paper);margin-inline:calc(-1*var(--padx,20px));padding-inline:var(--padx,20px);border-top:2px solid var(--ink);padding-block:var(--s1)}
   .cards-head{border-top:0;cursor:pointer;padding-block:var(--s1);min-height:44px;align-items:center}
   .cards-head .chev{display:inline}
   .cards-body{max-height:50vh;overflow-y:auto}
@@ -703,6 +704,33 @@ dl.emg dt{font-weight:700}
 .tut-card p{font-size:17px;line-height:1.8;margin-top:var(--s2);overflow-wrap:anywhere}
 .tut-act{display:flex;gap:var(--s2);margin-top:var(--s4)}
 .tut-act .btn{flex:1 1 0}
+/* 手機上「下一步」貼著底部分頁，不用往下捲才按得到 */
+@container app (max-width:699px){
+  .tut-card{margin-top:var(--s3);padding:var(--s3)}
+  .tut-ic{width:56px;height:56px}
+  .tut-act{position:sticky;bottom:var(--tabbar);z-index:11;background:var(--paper);margin-inline:calc(-1*var(--side));padding:var(--s2) var(--side);border-top:1px solid var(--rule2)}
+}
+@media (max-width:699px){.tut-act{bottom:calc(var(--tabbar) + env(safe-area-inset-bottom,0px))}}
+body[data-device="phone"] .tut-act{margin-inline:-16px;padding-inline:16px}
+/* 剛剛的進展：玩家的行動推動共同指標 */
+.gain{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;margin-top:var(--s1);font-size:15px;line-height:1.6;background:var(--paper2);border-left:4px solid var(--accent);border-radius:0 var(--r) var(--r) 0;padding:6px 10px}
+.gain b{color:var(--accent)}
+/* 手機上外框按鈕只留兩個字，加了「資料」也維持兩列，不再多佔首屏 */
+@media (max-width:699px){.band-long{display:none}}
+.home-badge>div{min-width:0}
+.home-badge .btn{margin-top:var(--s2);max-width:100%;white-space:normal}
+/* 回條：旅程六關與收起來的檢核細節 */
+.rc-steps{list-style:none;margin:var(--s3) 0 0;padding:0;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--s1)}
+@container app (min-width:560px){.rc-steps{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.rc-steps li{display:flex;align-items:center;gap:6px;font-size:15px;line-height:1.4;color:var(--muted);min-width:0}
+.rc-steps li span{flex:none;display:grid;place-items:center;width:28px;height:28px;border-radius:999px;box-shadow:inset 0 0 0 1.5px var(--muted);font-size:14px}
+.rc-steps li.done{color:var(--ink);font-weight:700}
+.rc-steps li.done span{background:var(--accent);color:var(--paper);box-shadow:none}
+.rc-steps li.cur{color:var(--ink)}
+.rc-steps li.cur span{box-shadow:inset 0 0 0 2px var(--accent)}
+.rc-more{margin-top:var(--s4);border-top:1px solid var(--rule);padding-top:var(--s2)}
+.rc-more summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-size:16px}
+.rc-more .id{font-family:var(--mono);font-size:16px;margin-top:var(--s1)}
 </style>
 <link rel="stylesheet" href="polish.css?v=pixel-portraits-2">
 
@@ -713,12 +741,13 @@ dl.emg dt{font-weight:700}
 
 <div class="band">
   <div class="band-in">
-    <p class="band-id"><b>巷仔口：一起回家</b>（暫名）臺北市試玩版 v0.7 · 2026-11-26</p>
+    <p class="band-id"><b>巷仔口：一起回家</b>（暫名）臺北市試玩版 v0.8 · 2026-11-27</p>
     <p class="band-note">簡報與討論用。動物、紀錄、組織與數字都是示例，尚未查核。</p>
     <div class="band-tools">
       <nav class="band-nav" aria-label="團隊用畫面">
-        <button type="button" class="band-btn" data-go="admin">管理後台</button>
-        <button type="button" class="band-btn" data-go="issues">待決議題</button>
+        <button type="button" class="band-btn" data-go="admin"><span class="band-long">管理</span>後台</button>
+        <button type="button" class="band-btn" data-go="issues"><span class="band-long">待決</span>議題</button>
+        <button type="button" class="band-btn" data-go="data"><span class="band-long">開放</span>資料</button>
         <button type="button" class="band-btn" id="roleBtn" data-go="roles">角色：散步者</button>
       </nav>
       <div class="seg" role="group" aria-label="預覽裝置">
@@ -748,7 +777,7 @@ dl.emg dt{font-weight:700}
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <script src="taipei.js?v=45b92a6b"></script>
-<script src="content.js?v=76d0cc68"></script>
-<script src="app.js?v=ccb91f1d"></script>
+<script src="content.js?v=5daa92b3"></script>
+<script src="app.js?v=1effd506"></script>
 
 </body></html>
