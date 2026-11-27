@@ -215,6 +215,14 @@ async function wildlife() {
     return locked === 2 && !names.includes('斯文豪氏攀蜥') && names.includes('石虎') && names.includes('黑冠麻鷺') && (await text('#spOpen')).includes('不設餵食點');
   });
   await check('首頁「回來」可以進物種卡', async () => { await open('home'); await click('#home-dex'); return (await text('h1')) === '物種卡'; });
+  await check('同一區半年的「回來」紀錄：6 個月、標示示例、9–11 月加總等於首頁（#32）', async () => {
+    await shot('wild-4-log');
+    const r = await js(`(() => { const m = CONTENT.WILD.log.months.slice(3), b = CONTENT.HOME.back, sum = i => m.reduce((s, x) => s + x[i], 0);
+      return { n: document.querySelectorAll('.wl-bars li').length, recent: document.querySelectorAll('.wl-recent li').length,
+        head: document.getElementById('wlHead').innerText, total: sum(1) === b.walks && sum(2) === b.hours && sum(3) === b.speciesWalks }; })()`);
+    const t = await text('.wl-recent');
+    return r.n === 6 && r.recent >= 5 && r.head.includes('示例') && r.total && !/族群數量|約\\s*[0-9]+\\s*隻/.test(await text('#wlHead + p')) && !t.includes('斯文豪氏攀蜥') && t.includes('還沒解鎖');
+  });
 }
 
 async function tutorial() {
@@ -259,6 +267,59 @@ async function tutorial() {
     return !(await has('#tutHint')) && (await js(`document.activeElement?.id`)) === 'home-howto';
   });
   await js(`localStorage.clear()`); // 後面的點擊目標、對比與版面檢查也要看得到提示
+}
+
+async function playtest() {
+  console.log('試玩回饋（11/27 前四項）');
+  await size(375);
+  await open('home');
+  await check('底部分頁換成物種卡，開放資料移到原型外框', async () =>
+    (await js(`[...document.querySelectorAll('#tabbar button')].map(b => b.innerText.trim()).join('、')`)) === '首頁、相遇、觀察、附近、物種卡'
+    && (await has('.band-nav [data-go="data"]')) && !(await has('#tabbar [data-go="data"]')));
+  await check('觀察頁記所有動物，不再只講犬隻', async () => { await open('survey'); const t = await text('#view'); return !/犬/.test(t) && t.includes('貓狗') && t.includes('野生動物'); });
+  await check('附近頁先列個體卡和野生動物，再放地圖', async () => {
+    await open('nearby');
+    return (await js(`document.querySelectorAll('[aria-labelledby="nbPets"] .a-mini').length`)) === 5
+      && (await js(`['nbPets', 'nbWild', 'nbMapHead'].map(id => document.getElementById(id).getBoundingClientRect().top).every((y, i, a) => !i || y > a[i - 1])`))
+      && !(await js(`[...document.querySelectorAll('[aria-labelledby="nbWild"] b')].some(b => b.textContent === '石虎')`));
+  });
+  await check('接阿福回家後，首頁「回家」從 52% 變成 53%，並寫出原因', async () => {
+    await open('home'); const before = (await text('.metric .big')).replace(/\s/g, '');
+    await animal('a3');
+    for (const k of ['indoor', 'family', 'vet']) await click(`#aq-${k}-yes`);
+    await click('#ad-apply'); await click('#ad-confirm');
+    for (const k of ['plan', 'net', 'vet', 'chip', 'kit']) await click(`#ac-${k}`);
+    await click('#ad-go'); await click('#badge-home');
+    return before === '52%' && (await text('.metric .big')).replace(/\s/g, '') === '53%' && (await text('.metric .gain')).includes('阿福回家了');
+  });
+  await check('送出五分鐘觀察後，首頁的散步次數加一', async () => {
+    await click('[data-go="survey"]'); await click('#sv-go'); await click('#t-wild'); await sleep(1200); await click('#sv-end'); await click('#sv-send');
+    await click('#sv-home');
+    return (await text('#view')).includes('本季散步 87 次') && (await js(`document.querySelectorAll('.metric')[1].querySelector('.gain')?.innerText.includes('1 種') ?? false`));
+  });
+  await check('記一隻沒有相似個體卡的貓：開新卡、第 1 關由你確認，編號收進細節', async () => {
+    await open('record'); await click('#sp-cat'); await click('#fill-0'); await sleep(100); await click('#next-0'); await click('#next-1'); await click('#submit');
+    const vis = await text('#view');
+    if (!(await text('h1')).startsWith('你發現了一隻新的貓') || /OB-\d/.test(vis) || vis.includes('等待檢核')) return false;
+    await click('#rc-card');
+    return (await text('.a-journey li.cur h3')) === '被認識' && (await text('.squad')).includes('散步者 你');
+  });
+  await check('記一隻像麒麟的貓：回條先問「這可能是誰」', async () => {
+    await open('record'); await click('#sp-cat'); await click('#fill-0'); await sleep(100); await click('#next-0');
+    for (const id of ['#ft-coat-orange', '#ft-pattern-tabby', '#ft-tail-kinked']) await click(id);
+    await click('#next-1'); await click('#submit');
+    return (await text('h1')) === '這可能是誰？' && await has('#am-a1');
+  });
+  for (const [w, h] of [[375, 760], [320, 568]]) await check(`教學每一步的按鈕在 ${w}×${h} 的首屏，不被分頁列擋住`, async () => {
+    await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 2, mobile: true });
+    await open('howto');
+    for (let k = 0; k < 6; k++) {
+      const ok = await js(`(() => { const b = document.getElementById('tut-next') || document.getElementById('tut-start'), r = b.getBoundingClientRect(), t = document.getElementById('tabbar').getBoundingClientRect().top; return r.top >= 0 && r.bottom <= t + .5; })()`);
+      if (!ok) throw new Error(`第 ${k + 1} 步的按鈕不在首屏`);
+      if (k < 5) await click('#tut-next');
+    }
+  });
+  await js(`localStorage.clear()`);
 }
 
 async function roles() {
@@ -507,6 +568,7 @@ try {
   await tiers();
   await wildlife();
   await tutorial();
+  await playtest();
   await roles();
   await targets();
   await contrast();
