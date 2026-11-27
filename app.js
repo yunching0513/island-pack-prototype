@@ -1181,6 +1181,21 @@ function speciesCardHTML(k, isNew = false) {
     <p class="note">${esc(W.cardNote)}</p>
   </article>`;
 }
+/* 同一區逐月的「回來」紀錄（#32 示範資料）：長條是每小時物種數，只畫紀錄與努力量 */
+function wildLogHTML() {
+  const L = C.WILD.log, rows = L.months.map(([m, walks, hours, sw]) => ({ m, walks, hours, rate: sw / hours }));
+  const max = Math.max(...rows.map(r => r.rate), C.HOME.goals.backRate);
+  const cue = Object.fromEntries(C.WILD.cues);
+  return `<section class="block" aria-labelledby="wlHead"><h2 class="sec" id="wlHead">${esc(L.title)}<span class="sample">示例</span></h2>
+    <p class="sec-lede">${esc(L.lede)}</p>
+    <ol class="wl-bars">${rows.map(r => `<li><span class="wl-m">${Number(r.m.slice(5))} 月</span>
+      <span class="wl-track" aria-hidden="true"><span class="wl-bar" style="width:${(r.rate / max * 100).toFixed(1)}%"></span></span>
+      <span class="wl-v"><b>${one(r.rate)}</b> 種／小時<span class="wl-sub">${r.walks} 次、${r.hours} 小時</span></span></li>`).join('')}</ol>
+    <p class="note">目標是每小時 ${C.HOME.goals.backRate} 種。${esc(L.note)}</p>
+    <h3 class="wl-h">${esc(L.recentHead)}</h3>
+    <ul class="wl-recent">${L.recent.map(([m, k, c, place]) => `<li><span class="wl-m">${Number(m.slice(5))} 月</span><span><b>${esc(C.SPECIES[k].rank || S.dex.has(k) ? C.SPECIES[k].name : `一種${groupLabel(C.SPECIES[k].group)}（你還沒解鎖）`)}</b>・${esc(cue[c])}・${esc(place)}</span></li>`).join('')}</ul>
+  </section>`;
+}
 function viewDex() {
   const keys = SP_KEYS(), open = S.dex.has(S.spid) ? S.spid : null;
   return `<div class="page pad">
@@ -1194,6 +1209,7 @@ function viewDex() {
         : `<div class="a-mini locked"><span class="px sm px-unk" role="img" aria-label="還沒解鎖">?</span><span><b>還沒記錄過</b><span class="a-mini-sub">一種${esc(groupLabel(s.group))}</span></span></div>`}</li>`;
     }).join('')}</ul>
     ${open ? `<section class="block" id="spOpen">${speciesCardHTML(open)}</section>` : ''}
+    ${wildLogHTML()}
     <section class="block invite"><div><h2 class="sec">出門記錄一次相遇</h2><p class="sec-lede">看見或聽見都可以記；認不出種，選類群也算。</p></div><button type="button" class="btn" data-act="wild-record">記錄野生動物</button></section>
   </div>`;
 }

@@ -215,6 +215,14 @@ async function wildlife() {
     return locked === 2 && !names.includes('斯文豪氏攀蜥') && names.includes('石虎') && names.includes('黑冠麻鷺') && (await text('#spOpen')).includes('不設餵食點');
   });
   await check('首頁「回來」可以進物種卡', async () => { await open('home'); await click('#home-dex'); return (await text('h1')) === '物種卡'; });
+  await check('同一區半年的「回來」紀錄：6 個月、標示示例、9–11 月加總等於首頁（#32）', async () => {
+    await shot('wild-4-log');
+    const r = await js(`(() => { const m = CONTENT.WILD.log.months.slice(3), b = CONTENT.HOME.back, sum = i => m.reduce((s, x) => s + x[i], 0);
+      return { n: document.querySelectorAll('.wl-bars li').length, recent: document.querySelectorAll('.wl-recent li').length,
+        head: document.getElementById('wlHead').innerText, total: sum(1) === b.walks && sum(2) === b.hours && sum(3) === b.speciesWalks }; })()`);
+    const t = await text('.wl-recent');
+    return r.n === 6 && r.recent >= 5 && r.head.includes('示例') && r.total && !/族群數量|約\\s*[0-9]+\\s*隻/.test(await text('#wlHead + p')) && !t.includes('斯文豪氏攀蜥') && t.includes('還沒解鎖');
+  });
 }
 
 async function tutorial() {
