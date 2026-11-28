@@ -6,9 +6,15 @@ document.documentElement.lang = 'zh-Hant-TW';
 document.head.append(Object.assign(document.createElement('meta'), { name: 'robots', content: 'noindex' }));
 
 const G = window.TAIPEI, C = window.CONTENT;
+/* 原型的「今天」跟著裝置日期走，試玩時不會停在舊日期；超出示例資料涵蓋的 11–12 月就用 C.TODAY（簡報日） */
+const NOW = (() => { const t = new Date(); return new Date(t - t.getTimezoneOffset() * 6e4).toISOString().slice(0, 16); })();
+if (NOW >= '2026-11-01' && NOW < '2027-01-01') C.TODAY = NOW.slice(0, 10);
+const nowWhen = () => NOW.startsWith(C.TODAY) ? NOW : `${C.TODAY}T07:40`;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+/* 緊急電話在手機上可以直接點撥 */
+const telify = s => esc(s).replace(/(^|[^0-9])(110|119)(?![0-9])/g, '$1<a class="tel" href="tel:$2">$2</a>');
 const fmtMonth = m => m === 'all' ? '2026 年 5 月至今' : `${m.slice(0, 4)} 年 ${+m.slice(5)} 月`;
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 
@@ -258,7 +264,7 @@ const areaName = (sc, key) => sc === 'town' ? key : sc === 'vill' ? `${byCode.ge
 /* ───────── 狀態 ───────── */
 const newFeat = () => ({ coat: null, pattern: null, tail: null, age: null, sex: null, ear: null, body: [], react: null });
 const newDraft = () => ({
-  species: null, hurt: false, photo: null, pin: null, precision: 'exact', late: false, when: '2026-11-07T07:40',
+  species: null, hurt: false, photo: null, pin: null, precision: 'exact', late: false, when: nowWhen(),
   f: newFeat(), wild: null, cue: 'seen', n: 1, note: '', pubText: false,
 });
 const copy = o => JSON.parse(JSON.stringify(o));
@@ -596,7 +602,7 @@ function viewHome() {
     </section>
     <section class="block">
       <h2 class="sec">看見受傷或受困的動物</h2>
-      <p class="sec-lede">請先聯絡緊急窗口，不用記錄相遇。這類狀況不進入遊戲，也不計分。有人身危險時撥 110 或 119；動物救援的在地窗口待查核。</p>
+      <p class="sec-lede">請先聯絡緊急窗口，不用記錄相遇。這類狀況不進入遊戲，也不計分。有人身危險時撥 <a class="tel" href="tel:110">110</a> 或 <a class="tel" href="tel:119">119</a>；動物救援的在地窗口待查核。</p>
     </section>
     <section class="block invite">
       <div><h2 class="sec">站定五分鐘</h2><p class="sec-lede">找一個點停下來，留意周遭的動物與聲音。什麼都沒看到也要送出，這筆紀錄讓「回來」算得更準。</p></div>
@@ -851,7 +857,7 @@ function cardHTML({ c: raw, why }, isNew) {
     ${open ? `<div class="kcard-more">
       ${(c.body || []).map(p => `<p>${esc(p)}</p>`).join('')}
       ${c.list ? `<ul>${c.list.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
-      ${c.rows ? `<dl>${c.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>` : ''}
+      ${c.rows ? `<dl>${c.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${telify(v)}</dd>`).join('')}</dl>` : ''}
       ${c.tiers ? `<div class="tiers">${c.tiers.map(([k, v]) => `<div><b>${esc(k)}</b>${esc(v)}</div>`).join('')}</div>` : ''}
       <p class="prov"><b>${esc(C.CHECK[c.check])}</b><br>來源：${esc(c.source)}<br>更新 ${c.updated}，有效至 ${c.valid}</p>
     </div>` : ''}
@@ -1020,7 +1026,7 @@ function emergencyHTML() {
   const e = C.ENC.emergency;
   return `<h2>${esc(e.title)}</h2>
     <p class="safe">${esc(e.lead)}</p>
-    <div class="form-sec"><h3>聯絡誰</h3><dl class="emg">${e.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl></div>
+    <div class="form-sec"><h3>聯絡誰</h3><dl class="emg">${e.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${telify(v)}</dd>`).join('')}</dl></div>
     <div class="form-sec"><h3>等待的時候</h3><ul class="after">${e.tips.map(t => `<li>${esc(t)}</li>`).join('')}</ul></div>
     <div class="step-act">
       <button type="button" class="btn primary" data-go="home">回首頁</button>
@@ -1035,7 +1041,6 @@ const pubArea = d => !d.pin ? '—' : isSensitive(d) ? `${d.pin.town}（敏感�
 const pubWhen = d => fmtMonth(d.when.slice(0, 7)) + (isSensitive(d) ? `，延後 ${C.WILD.delay} 天才公開` : '');
 function stepPublish() {
   const d = S.draft, p = d.pin;
-  const [lon, lat] = p ? toLonLat(p.x, p.y) : ['—', '—'];
   return `<h2>送出</h2>
     <p class="step-note">${isSensitive(d) ? `敏感物種的公開版本只到行政區，並延後 ${C.WILD.delay} 天。` : '公開版本只到里與月份。'}原始照片與精確位置只有團隊與照護者看得到。</p>
     ${demoBtn(2)}
@@ -1055,7 +1060,7 @@ function stepPublish() {
           ${d.pubText && d.note ? `<dt>想說的話</dt><dd>${esc(d.note)}</dd>` : ''}</dl>
         </div>
         <div class="pv raw"><h4>平台保留，不公開</h4>
-          <dl><dt>精確位置</dt><dd class="mono">${lat}, ${lon}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd class="mono">2026-11-07 ${d.late ? '12:30' : '07:44'}</dd><dt>原始照片</dt><dd>${d.photo ? '只給照護者比對是不是同一隻' : '無'}</dd></dl>
+          <dl><dt>精確位置</dt><dd>${p ? `已記下（${esc(p.town + p.vname)}附近）。座標不在畫面上顯示` : '—'}</dd><dt>觀察時間</dt><dd class="mono">${esc(d.when.replace('T', ' '))}</dd><dt>上傳時間</dt><dd>${d.late ? '稍後補傳' : '剛剛'}</dd><dt>原始照片</dt><dd>${d.photo ? '只給照護者比對是不是同一隻' : '無'}</dd></dl>
         </div>
       </div>
     </div>
@@ -1243,7 +1248,7 @@ function submitRecord() {
   const d = S.draft;
   if (!d.pin || !d.species) { S.err = '還需要位置和動物種類。'; return showErr(); }
   const t = {
-    id: `OB-20261107-0${512 + S.done.length + S.queue.length}`, place: `${d.pin.town} ${d.pin.vname}`, time: d.when.replace('T', ' '), late: d.late, mine: true,
+    id: `OB-${C.TODAY.replace(/-/g, '')}-0${512 + S.done.length + S.queue.length}`, place: `${d.pin.town} ${d.pin.vname}`, time: d.when.replace('T', ' '), late: d.late, mine: true,
     user: { summary: pubSummary(d), photo: !!d.photo, text: d.note ? `想說的話（${d.pubText ? '願意公開' : '不公開'}）：${d.note}` : '（沒有補充文字）' },
     ai: { note: d.species === 'wild' ? (isSensitive(d) ? `敏感物種：公開時只到行政區，延後 ${C.WILD.delay} 天` : '野生動物相遇，算進「回來」') : '找到 0 筆可能是同一隻的紀錄（示例）' },
     flags: [], flagNote: '', fixed: [], human: {}, draft: copy(d),

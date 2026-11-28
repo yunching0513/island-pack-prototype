@@ -297,6 +297,18 @@ async function playtest() {
     await click('#sv-home');
     return (await text('#view')).includes('本季散步 87 次') && (await js(`document.querySelectorAll('.metric')[1].querySelector('.gain')?.innerText.includes('1 種') ?? false`));
   });
+  await check('送出頁的「精確位置」不寫座標，時間跟著今天走（不是 11/7）', async () => {
+    await open('record'); await click('#sp-cat'); await click('#fill-0'); await sleep(100); await click('#next-0'); await click('#next-1');
+    await js("document.querySelector('.pv.raw').scrollIntoView({block:'center'})"); await shot('publish-raw');
+    const t = await text('.pv.raw'), today = await js('window.CONTENT.TODAY');
+    return !/[0-9]{2,3}\.[0-9]{4,}/.test(t) && t.includes('座標不在畫面上顯示') && !t.includes('2026-11-07') && t.includes(today);
+  });
+  await check('受傷受困頁的 110、119 可以直接撥號，按鈕至少 44px', async () => {
+    await open('record'); await click('#hurt-0'); await js("document.querySelector('dl.emg').scrollIntoView({block:'center'})"); await sleep(150); await shot('hurt-tel', false);
+    const tels = await js(`[...document.querySelectorAll('#stepBody a.tel')].map(a => [a.getAttribute('href'), a.getBoundingClientRect().height])`);
+    return tels.length === 2 && tels[0][0] === 'tel:110' && tels[1][0] === 'tel:119' && tels.every(([, h]) => h >= 44);
+  });
+  await check('首頁的緊急電話也能點撥', async () => { await open('home'); return (await js(`document.querySelectorAll('#view a.tel[href^="tel:"]').length`)) === 2; });
   await check('記一隻沒有相似個體卡的貓：開新卡、第 1 關由你確認，編號收進細節', async () => {
     await open('record'); await click('#sp-cat'); await click('#fill-0'); await sleep(100); await click('#next-0'); await click('#next-1'); await click('#submit');
     const vis = await text('#view');
